@@ -16,6 +16,7 @@
 package co.cask.cdap.internal.app.runtime.distributed;
 
 import co.cask.cdap.app.runtime.ProgramRunner;
+import co.cask.cdap.common.conf.CConfiguration;
 import co.cask.cdap.internal.app.runtime.ProgramRunnerFactory;
 import co.cask.cdap.internal.app.runtime.batch.MapReduceProgramRunner;
 import co.cask.cdap.internal.app.runtime.spark.SparkProgramRunner;
@@ -29,6 +30,7 @@ import com.google.inject.Scopes;
 import com.google.inject.Singleton;
 import com.google.inject.multibindings.MapBinder;
 import com.google.inject.util.Modules;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.mapred.YarnClientProtocolProvider;
 import org.apache.twill.api.TwillContext;
 
@@ -52,8 +54,8 @@ final class WorkflowTwillRunnable extends AbstractProgramTwillRunnable<WorkflowP
   }
 
   @Override
-  protected Module createModule(TwillContext context) {
-    Module module = super.createModule(context);
+  protected Module createModule(TwillContext context, CConfiguration cConf, Configuration hConf) {
+    Module module = super.createModule(context, cConf, hConf);
     return Modules.combine(module, new PrivateModule() {
       @Override
       protected void configure() {

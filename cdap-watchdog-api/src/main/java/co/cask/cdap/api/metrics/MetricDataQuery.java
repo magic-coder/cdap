@@ -53,7 +53,7 @@ public final class MetricDataQuery {
   public MetricDataQuery(long startTs, long endTs, int resolution,
                          String metricName, MetricType metricType,
                          Map<String, String> sliceByTagValues, List<String> groupByTags) {
-    this(startTs, endTs, resolution, -1,
+    this(startTs, endTs, resolution, 10000,
          metricName, metricType,
          sliceByTagValues, groupByTags, null);
   }

@@ -185,6 +185,7 @@ public class DefaultCube implements Cube {
   private Table<Map<String, String>, Long, Long> getTimeSeries(CubeQuery query, FactScanner scanner) {
     // tag values -> time -> values
     Table<Map<String, String>, Long, Long> resultTable = HashBasedTable.create();
+    int rowCount = 0;
     while (scanner.hasNext()) {
       FactScanResult next = scanner.next();
 
@@ -213,6 +214,10 @@ public class DefaultCube implements Cube {
 
       if (skip) {
         continue;
+      }
+
+      if ((query.getLimit() > 0) && (++rowCount > query.getLimit())) {
+        break;
       }
 
       for (TimeValue timeValue : next) {

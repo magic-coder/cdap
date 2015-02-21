@@ -76,6 +76,12 @@ public abstract class AbstractCubeTest {
                        new TimeSeries("metric1", tagValues("tag2", "1"), timeValues(1, 2, 7, 3, 10, 2, 11, 3)),
                        new TimeSeries("metric1", tagValues("tag2", "2"), timeValues(3, 8))));
 
+    // limit the result to 1 row and verify
+    verifyCountQuery(cube, 0, 15, 1, 1, "metric1", ImmutableMap.of("tag1", "1"), ImmutableList.of("tag2"),
+                     ImmutableList.of(
+                       new TimeSeries("metric1", tagValues("tag2", "1"), timeValues(1, 2, 7, 3, 10, 2, 11, 3))), null
+                       );
+
     verifyCountQuery(cube, 0, 15, 1, "metric1", ImmutableMap.of("tag1", "1", "tag2", "1", "tag3", "1"),
                      new ArrayList<String>(),
                      ImmutableList.of(
@@ -210,7 +216,14 @@ public abstract class AbstractCubeTest {
   private void verifyCountQuery(Cube cube, long startTs, long endTs, int resolution, String measureName,
                                 Map<String, String> sliceByTagValues, List<String> groupByTags,
                                 Collection<TimeSeries> expected, Interpolator interpolator) throws Exception {
-    CubeQuery query = new CubeQuery(startTs, endTs, resolution, -1, measureName, MeasureType.COUNTER,
+    verifyCountQuery(cube, startTs, endTs, resolution, -1, measureName, sliceByTagValues, groupByTags, expected,
+                     interpolator);
+  }
+
+  private void verifyCountQuery(Cube cube, long startTs, long endTs, int resolution, int limit, String measureName,
+                                Map<String, String> sliceByTagValues, List<String> groupByTags,
+                                Collection<TimeSeries> expected, Interpolator interpolator) throws Exception {
+    CubeQuery query = new CubeQuery(startTs, endTs, resolution, limit, measureName, MeasureType.COUNTER,
                                     sliceByTagValues, groupByTags, interpolator);
     Collection<TimeSeries> result = cube.query(query);
     Assert.assertEquals(expected.size(), result.size());

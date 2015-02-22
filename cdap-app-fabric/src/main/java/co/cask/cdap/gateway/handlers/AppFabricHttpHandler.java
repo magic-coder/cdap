@@ -847,8 +847,7 @@ public class AppFabricHttpHandler extends AbstractAppFabricHttpHandler {
   @GET
   @Path("/procedures")
   public void getAllProcedures(HttpRequest request, HttpResponder responder) {
-    programLifecycleHttpHandler.getAllProcedures(RESTMigrationUtils.rewriteV2RequestToV3(request), responder,
-                                                 Constants.DEFAULT_NAMESPACE);
+    programList(responder, Constants.DEFAULT_NAMESPACE, ProgramType.PROCEDURE, null, store);
   }
 
   /**

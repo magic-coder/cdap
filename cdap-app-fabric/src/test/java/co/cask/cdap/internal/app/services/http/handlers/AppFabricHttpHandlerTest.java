@@ -36,6 +36,7 @@ import co.cask.cdap.gateway.handlers.AppFabricHttpHandler;
 import co.cask.cdap.internal.app.HttpServiceSpecificationCodec;
 import co.cask.cdap.internal.app.ScheduleSpecificationCodec;
 import co.cask.cdap.internal.app.ServiceSpecificationCodec;
+import co.cask.cdap.internal.app.runtime.batch.AppWithMapReduce;
 import co.cask.cdap.internal.app.services.http.AppFabricTestBase;
 import co.cask.cdap.proto.ProgramType;
 import co.cask.cdap.test.SlowTests;
@@ -417,6 +418,9 @@ public class AppFabricHttpHandlerTest extends AppFabricTestBase {
       response = deploy(AppWithWorkflow.class);
       Assert.assertEquals(200, response.getStatusLine().getStatusCode());
 
+      response = deploy(AppWithMapReduce.class);
+      Assert.assertEquals(200, response.getStatusLine().getStatusCode());
+
       response = doGet("/v2/apps/WordCountApp/flows/WordCountFlow");
       Assert.assertEquals(200, response.getStatusLine().getStatusCode());
       String result = EntityUtils.toString(response.getEntity());
@@ -436,6 +440,17 @@ public class AppFabricHttpHandlerTest extends AppFabricTestBase {
       result = EntityUtils.toString(response.getEntity());
       Assert.assertNotNull(result);
       Assert.assertTrue(result.contains("VoidMapReduceJob"));
+
+      //verify mapreduce
+      response = doGet("/v2/apps/AppWithMapReduce/mapreduce/ClassicWordCount");
+      Assert.assertEquals(200, response.getStatusLine().getStatusCode());
+      result = EntityUtils.toString(response.getEntity());
+      Assert.assertNotNull(result);
+      System.out.println("Retrieved MR Spec: \n" + result);
+      JsonObject jsonObject = GSON.fromJson(result, JsonObject.class);
+      JsonArray dataSets = jsonObject.get("dataSets").getAsJsonArray();
+      // This fails
+      Assert.assertNotEquals(0, dataSets.size());
 
       // verify single workflow
       response = doGet("/v2/apps/AppWithWorkflow/workflows/SampleWorkflow");

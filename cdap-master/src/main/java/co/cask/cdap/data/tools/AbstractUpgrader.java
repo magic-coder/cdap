@@ -17,6 +17,7 @@
 package co.cask.cdap.data.tools;
 
 import co.cask.cdap.api.common.Bytes;
+import co.cask.cdap.app.ApplicationSpecification;
 import co.cask.cdap.common.conf.CConfiguration;
 import co.cask.cdap.common.conf.Constants;
 import co.cask.cdap.data2.datafabric.DefaultDatasetNamespace;
@@ -51,25 +52,25 @@ import java.net.URISyntaxException;
 /**
  * Abstract class for Upgrade
  */
-public abstract class AbstractUpgrade {
+public abstract class AbstractUpgrader {
 
-  public static final String EMPTY_STRING = "";
-  private static final Logger LOG = LoggerFactory.getLogger(AbstractUpgrade.class);
-  static final byte[] COLUMN = Bytes.toBytes("c");
-  static final String FORWARD_SLASH = "/";
-  static final String CDAP_WITH_FORWARD_SLASH = Constants.Logging.SYSTEM_NAME + FORWARD_SLASH;
-  static final String DEVELOPER_STRING = "developer";
+  protected static final String EMPTY_STRING = "";
+  protected static final Logger LOG = LoggerFactory.getLogger(AbstractUpgrader.class);
+  protected static final byte[] COLUMN = Bytes.toBytes("c");
+  protected static final String FORWARD_SLASH = "/";
+  protected static final String CDAP_WITH_FORWARD_SLASH = Constants.Logging.SYSTEM_NAME + FORWARD_SLASH;
+  protected static final String DEVELOPER_STRING = "developer";
 
-  static DatasetFramework namespacedFramework;
-  static DatasetFramework nonNamespaedFramework;
-  static TransactionExecutorFactory executorFactory;
-  static CConfiguration cConf;
-  static TransactionService txService;
-  static ZKClientService zkClientService;
-  static LocationFactory locationFactory;
-  static TransactionSystemClient txClient;
-  static DefaultStore defaultStore;
-  static final Gson GSON;
+  protected static DatasetFramework namespacedFramework;
+  protected static DatasetFramework nonNamespaedFramework;
+  protected static TransactionExecutorFactory executorFactory;
+  protected static CConfiguration cConf;
+  protected static TransactionService txService;
+  protected static ZKClientService zkClientService;
+  protected static LocationFactory locationFactory;
+  protected static TransactionSystemClient txClient;
+  protected static DefaultStore defaultStore;
+  protected static final Gson GSON;
 
   static {
     GsonBuilder builder = new GsonBuilder();
@@ -88,7 +89,6 @@ public abstract class AbstractUpgrade {
     DatasetFramework datasetFramework =
       new NamespacedDatasetFramework(new InMemoryDatasetFramework(registryFactory),
                                      new DefaultDatasetNamespace(cConf));
-    // TODO: this doesn't sound right. find out why its needed.
     datasetFramework.addModule(Id.DatasetModule.from(Constants.SYSTEM_NAMESPACE, "table"),
                                new HBaseTableModule());
     datasetFramework.addModule(Id.DatasetModule.from(Constants.SYSTEM_NAMESPACE, "metricsTable"),
@@ -146,7 +146,7 @@ public abstract class AbstractUpgrade {
    * @param validPrefixes the valid prefixes
    * @return boolean which is true if the key start with validPrefixes else false
    */
-  boolean checkKeyValidality(String key, String[] validPrefixes) {
+  boolean isKeyValid(String key, String[] validPrefixes) {
     for (String validPrefix : validPrefixes) {
       if (key.startsWith(validPrefix)) {
         return true;

@@ -29,9 +29,9 @@ import java.util.List;
 /**
  * Class to Upgrade the archive directories
  */
-public class ArchiveUpgrade extends AbstractUpgrade implements Upgrade {
+public class ArchiveUpgrader extends AbstractUpgrader implements Upgrade {
 
-  private static final Logger LOG = LoggerFactory.getLogger(ArchiveUpgrade.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ArchiveUpgrader.class);
 
   @Override
   public void upgrade(Injector injector) throws Exception {

@@ -48,15 +48,15 @@ import java.util.Iterator;
 /**
  * Upgraded the Meta Data for applications
  */
-public class MDSUpgrade extends AbstractUpgrade implements Upgrade {
+public class MDSUpgrader extends AbstractUpgrader implements Upgrade {
 
-  private static final Logger LOG = LoggerFactory.getLogger(MDSUpgrade.class);
+  private static final Logger LOG = LoggerFactory.getLogger(MDSUpgrader.class);
   private static final String[] OTHERS = {AppMetadataStore.TYPE_STREAM, AppMetadataStore.TYPE_NAMESPACE,
     MDSNotificationFeedStore.TYPE_NOTIFICATION_FEED};
 
   private final Transactional<UpgradeTable, Table> appMDS;
 
-  public MDSUpgrade() {
+  public MDSUpgrader() {
     this.appMDS = Transactional.of(executorFactory, new Supplier<UpgradeTable>() {
       @Override
       public UpgradeTable get() {
@@ -92,7 +92,7 @@ public class MDSUpgrade extends AbstractUpgrade implements Upgrade {
           } else if (key.contains(AppMetadataStore.TYPE_RUN_RECORD_COMPLETED)) {
             // run record metadata
             runRecordCompletedHandler(row);
-          } else if (!checkKeyValidality(key, OTHERS)) {
+          } else if (!isKeyValid(key, OTHERS)) {
             LOG.warn("Invalid Metadata with key {} found in {}", key, DefaultStore.APP_META_TABLE);
             throw new RuntimeException("Invalid metadata with key " + key);
           }

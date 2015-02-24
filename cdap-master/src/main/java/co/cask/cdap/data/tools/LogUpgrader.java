@@ -17,7 +17,6 @@
 package co.cask.cdap.data.tools;
 
 import co.cask.cdap.api.common.Bytes;
-import co.cask.cdap.api.dataset.table.OrderedTable;
 import co.cask.cdap.api.dataset.table.Row;
 import co.cask.cdap.api.dataset.table.Scanner;
 import co.cask.cdap.api.dataset.table.Table;
@@ -43,14 +42,14 @@ import java.util.Map;
 /**
  * Upgrades the Logs
  */
-public class LogUpgrade extends AbstractUpgrade implements Upgrade {
+public class LogUpgrader extends AbstractUpgrader implements Upgrade {
 
-  private static final Logger LOG = LoggerFactory.getLogger(LogUpgrade.class);
+  private static final Logger LOG = LoggerFactory.getLogger(LogUpgrader.class);
   private static final String[] OTHERS = {"logs", Constants.SYSTEM_NAMESPACE, Constants.DEFAULT_NAMESPACE};
 
   private final Transactional<DatasetContext<Table>, Table> logMDS;
 
-  public LogUpgrade() {
+  public LogUpgrader() {
     this.logMDS = Transactional.of(
       new TransactionExecutorFactory() {
         @Override
@@ -94,7 +93,7 @@ public class LogUpgrade extends AbstractUpgrade implements Upgrade {
               renameLocation(new URI(oldPath).resolve("."), new URI(newPath).resolve("."));
               fileMetaDataManager.writeMetaData(newKey, startTimeMs, locationFactory.create(new URI(newPath)));
               LOG.info("Upgrading logs for {}", key);
-            } else if (!checkKeyValidality(key, OTHERS)) {
+            } else if (!isKeyValid(key, OTHERS)) {
               LOG.warn("Unknown key {} found. Failed to Upgrade", key);
               throw new RuntimeException("Unknown key: " + key);
             }

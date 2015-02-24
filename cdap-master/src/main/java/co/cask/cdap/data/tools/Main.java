@@ -163,23 +163,23 @@ public class Main {
 
   private void performUpgrade(Injector injector) throws Exception {
     LOG.debug("Performing setup for Upgrade ...");
-    Upgrade upgradeSetup = new UpgradeSetup();
+    Upgrade upgradeSetup = new UpgraderSetup();
     upgradeSetup.upgrade(injector);
 
     LOG.debug("Upgrading System and User Datasets ...");
-    Upgrade dsUpgrade = new DatasetUpgrade();
+    Upgrade dsUpgrade = new DatasetUpgrader();
     dsUpgrade.upgrade(injector);
 
     LOG.debug("Upgrading app meta data ...");
-    Upgrade mdsUpgrad = new MDSUpgrade();
+    Upgrade mdsUpgrad = new MDSUpgrader();
     mdsUpgrad.upgrade(injector);
 
     LOG.debug("Upgrading archives ...");
-    Upgrade archiveUpgrade = new ArchiveUpgrade();
+    Upgrade archiveUpgrade = new ArchiveUpgrader();
     archiveUpgrade.upgrade(injector);
 
     LOG.debug("Upgrading logs ...");
-    Upgrade logUpgrade = new LogUpgrade();
+    Upgrade logUpgrade = new LogUpgrader();
     logUpgrade.upgrade(injector);
   }
 

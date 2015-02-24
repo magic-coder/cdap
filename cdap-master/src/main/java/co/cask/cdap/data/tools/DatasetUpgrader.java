@@ -41,9 +41,9 @@ import java.io.IOException;
 /**
  * Handles upgrade for System and User Datasets
  */
-public class DatasetUpgrade extends AbstractUpgrade implements Upgrade {
+public class DatasetUpgrader extends AbstractUpgrader implements Upgrade {
 
-  private static final Logger LOG = LoggerFactory.getLogger(MDSUpgrade.class);
+  private static final Logger LOG = LoggerFactory.getLogger(MDSUpgrader.class);
 
   @Override
   public void upgrade(Injector injector) throws Exception {
@@ -71,7 +71,7 @@ public class DatasetUpgrade extends AbstractUpgrade implements Upgrade {
     }
   }
 
-  private static void upgradeUserTables(final Injector injector) throws Exception {
+  private static void upgradeUserTables(final Injector injector) throws Exception  {
     // We assume that all tables in USER namespace belong to Table type datasets. So we loop thru them
     // and upgrading with the help of HBaseTableAdmin
     DefaultDatasetNamespace namespace = new DefaultDatasetNamespace(cConf);
@@ -90,12 +90,15 @@ public class DatasetUpgrade extends AbstractUpgrade implements Upgrade {
 
         final boolean supportsIncrement =
           "true".equalsIgnoreCase(desc.getValue(Table.PROPERTY_READLESS_INCREMENT));
+        final boolean transactional =
+          !"true".equalsIgnoreCase(desc.getValue(Constants.Dataset.TABLE_TX_DISABLED));
         DatasetAdmin admin = new AbstractHBaseDataSetAdmin(tableName, hConf, hBaseTableUtil) {
           @Override
           protected CoprocessorJar createCoprocessorJar() throws IOException {
             return HBaseTableAdmin.createCoprocessorJarInternal(cConf,
                                                                 injector.getInstance(LocationFactory.class),
                                                                 hBaseTableUtil,
+                                                                transactional,
                                                                 supportsIncrement);
           }
 

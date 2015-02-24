@@ -35,7 +35,7 @@ import org.apache.twill.zookeeper.ZKClientService;
 /**
  * Does the necessary initial setup before Upgrading difference Services and Modules
  */
-public class UpgradeSetup extends AbstractUpgrade implements Upgrade {
+public class UpgraderSetup extends AbstractUpgrader implements Upgrade {
 
   @Override
   public void upgrade(Injector injector) throws Exception {

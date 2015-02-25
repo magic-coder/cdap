@@ -21,6 +21,7 @@ import co.cask.cdap.common.conf.Constants;
 import co.cask.cdap.proto.ProgramType;
 import com.google.common.base.Preconditions;
 
+import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 
@@ -66,9 +67,9 @@ public class VersionMigrationUtils {
    * @param programType type of program on which an operation is being executed
    * @param path endpoint attempted to hit
    * @return resolved URL for the specified path
-   * @throws MalformedURLException
+   * @throws IOException
    */
-  public static URL resolveURL(ClientConfig config, ProgramType programType, String path) throws MalformedURLException {
+  public static URL resolveURL(ClientConfig config, ProgramType programType, String path) throws IOException {
     if (ProgramType.PROCEDURE == programType) {
       VersionMigrationUtils.assertProcedureSupported(config);
       return config.resolveURL(path);

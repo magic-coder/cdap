@@ -37,14 +37,14 @@ public class QueryClient {
     Supplier<String> hostname = new Supplier<String>() {
       @Override
       public String get() {
-        return config.getHostname();
+        return config.getConnectionConfig().getHostname();
       }
     };
 
     Supplier<Integer> port = new Supplier<Integer>() {
       @Override
       public Integer get() {
-        return config.getPort();
+        return config.getConnectionConfig().getPort();
       }
     };
 

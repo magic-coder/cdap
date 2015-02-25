@@ -1,5 +1,5 @@
 /*
- * Copyright © 2014 Cask Data, Inc.
+ * Copyright © 2012-2014 Cask Data, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -14,13 +14,19 @@
  * the License.
  */
 
-package co.cask.cdap.cli;
+package co.cask.cdap.cli.exception;
+
+import co.cask.cdap.client.config.ConnectionConfig;
+
+import javax.annotation.Nullable;
 
 /**
- * Constants for the CLI.
+ * Thrown when there is an issue in connecting to a CDAP instance.
  */
-public class Constants {
+public class ConnectionFailureException extends Exception {
 
-  public static final String EV_HOSTNAME = "CDAP_HOST";
+  public ConnectionFailureException(ConnectionConfig config, @Nullable Throwable cause) {
+    super("Failed to connect to " + config.getBaseURI(), cause);
+  }
 
 }

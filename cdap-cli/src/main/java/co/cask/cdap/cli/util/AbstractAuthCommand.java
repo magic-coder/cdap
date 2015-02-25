@@ -17,6 +17,10 @@
 package co.cask.cdap.cli.util;
 
 import co.cask.cdap.cli.CLIConfig;
+import co.cask.cdap.cli.ConnectionManager;
+import co.cask.cdap.cli.LoginFlow;
+import co.cask.cdap.client.config.ConnectionConfig;
+import co.cask.cdap.client.util.UserAccessToken;
 import co.cask.cdap.common.exception.UnAuthorizedAccessTokenException;
 import co.cask.common.cli.Arguments;
 import co.cask.common.cli.Command;
@@ -29,20 +33,34 @@ import java.io.PrintStream;
 public abstract class AbstractAuthCommand implements Command {
 
   private final CLIConfig cliConfig;
+  private final LoginFlow loginFlow;
+  private final ConnectionManager connectionManager;
 
-  public AbstractAuthCommand(CLIConfig cliConfig) {
+  public AbstractAuthCommand(CLIConfig cliConfig, ConnectionManager connectionManager, LoginFlow loginFlow) {
     this.cliConfig = cliConfig;
+    this.connectionManager = connectionManager;
+    this.loginFlow = loginFlow;
   }
 
   @Override
-  public void execute(Arguments arguments, PrintStream printStream) throws Exception {
+  public void execute(Arguments arguments, PrintStream output) throws Exception {
     try {
-      perform(arguments, printStream);
+      perform(arguments, output);
     } catch (UnAuthorizedAccessTokenException e) {
-      cliConfig.updateAccessToken(printStream);
-      perform(arguments, printStream);
+      ConnectionConfig originalConfig = cliConfig.getClientConfig().getConnectionConfig();
+      UserAccessToken token = loginFlow.login(originalConfig);
+      ConnectionConfig newConfig = new ConnectionConfig.Builder(originalConfig)
+        .setAccessToken(token)
+        .setUser(token.getUser())
+        .build();
+      if (connectionManager.isConnectionValid(cliConfig.getClientConfig(), newConfig)) {
+        cliConfig.setConnectionConfig(newConfig);
+      }
+      cliConfig.getClientConfig().getConnectionConfig().setAccessToken(token);
+      cliConfig.getClientConfig().getConnectionConfig().setUser(token.getUser());
+      perform(arguments, output);
     }
   }
 
-  public abstract void perform(Arguments arguments, PrintStream printStream) throws Exception;
+  public abstract void perform(Arguments arguments, PrintStream output) throws Exception;
 }

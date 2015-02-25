@@ -17,6 +17,8 @@
 package co.cask.cdap.cli.command;
 
 import co.cask.cdap.cli.CLIConfig;
+import co.cask.cdap.cli.ConnectionManager;
+import co.cask.cdap.client.config.ConnectionConfig;
 import co.cask.cdap.common.conf.CConfiguration;
 import co.cask.cdap.common.conf.Constants;
 import co.cask.common.cli.Arguments;
@@ -33,11 +35,13 @@ public class ConnectCommand implements Command {
 
   private final CLIConfig cliConfig;
   private final CConfiguration cConf;
+  private final ConnectionManager connectionManager;
 
   @Inject
-  public ConnectCommand(CLIConfig cliConfig, CConfiguration cConf) {
+  public ConnectCommand(CLIConfig cliConfig, CConfiguration cConf, ConnectionManager connectionManager) {
     this.cConf = cConf;
     this.cliConfig = cliConfig;
+    this.connectionManager = connectionManager;
   }
 
   @Override
@@ -58,9 +62,12 @@ public class ConnectCommand implements Command {
         cConf.getInt(Constants.Router.ROUTER_PORT);
     }
 
-    CLIConfig.ConnectionInfo connectionInfo = new CLIConfig.ConnectionInfo(hostname, port, sslEnabled);
     try {
-      cliConfig.tryConnect(connectionInfo, output, true);
+      // TODO: make user and namespace configurable via this command
+      ConnectionConfig connectionConfig = new ConnectionConfig(null, sslEnabled, hostname, port,
+                                                               Constants.DEFAULT_NAMESPACE,
+                                                               null, cliConfig.getClientConfig().getApiVersion());
+      connectionManager.tryConnect(connectionConfig);
     } catch (Exception e) {
       output.println("Failed to connect to " + uriString + ": " + e.getMessage());
     }
@@ -74,24 +81,5 @@ public class ConnectCommand implements Command {
   @Override
   public String getDescription() {
     return "Connects to a CDAP instance.";
-  }
-
-  /**
-   * Tries default connection specified by CConfiguration.
-   */
-  public void tryDefaultConnection(PrintStream output, boolean verbose) {
-    CConfiguration cConf = CConfiguration.create();
-    boolean sslEnabled = cConf.getBoolean(Constants.Security.SSL_ENABLED);
-    String hostname = cConf.get(Constants.Router.ADDRESS);
-    int port = sslEnabled ?
-      cConf.getInt(Constants.Router.ROUTER_SSL_PORT) :
-      cConf.getInt(Constants.Router.ROUTER_PORT);
-    CLIConfig.ConnectionInfo connectionInfo = new CLIConfig.ConnectionInfo(hostname, port, sslEnabled);
-
-    try {
-      cliConfig.tryConnect(connectionInfo, output, verbose);
-    } catch (Exception e) {
-      // NO-OP
-    }
   }
 }

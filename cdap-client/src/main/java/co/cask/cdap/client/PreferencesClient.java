@@ -17,6 +17,7 @@
 package co.cask.cdap.client;
 
 import co.cask.cdap.client.config.ClientConfig;
+import co.cask.cdap.client.exception.NotConnectedException;
 import co.cask.cdap.client.util.RESTClient;
 import co.cask.cdap.common.exception.NotFoundException;
 import co.cask.cdap.common.exception.ProgramNotFoundException;
@@ -56,8 +57,10 @@ public class PreferencesClient {
    * @return map of key-value pairs
    * @throws IOException if a network error occurred
    * @throws UnAuthorizedAccessTokenException if the request is not authorized successfully in the gateway server
+   * @throws NotConnectedException if there is no connection configured
    */
-  public Map<String, String> getInstancePreferences() throws IOException, UnAuthorizedAccessTokenException {
+  public Map<String, String> getInstancePreferences()
+    throws IOException, UnAuthorizedAccessTokenException, NotConnectedException {
     URL url = config.resolveURLV3("configuration/preferences");
     HttpResponse response = restClient.execute(HttpMethod.GET, url, config.getAccessToken());
     return ObjectResponse.fromJsonBody(response, new TypeToken<Map<String, String>>() { }).getResponseObject();
@@ -69,9 +72,10 @@ public class PreferencesClient {
    * @param preferences map of key-value pairs
    * @throws IOException if a network error occurred
    * @throws UnAuthorizedAccessTokenException if the request is not authorized successfully in the gateway server
+   * @throws NotConnectedException if there is no connection configured
    */
-  public void setInstancePreferences(Map<String, String> preferences) throws IOException,
-    UnAuthorizedAccessTokenException {
+  public void setInstancePreferences(Map<String, String> preferences)
+    throws IOException, UnAuthorizedAccessTokenException, NotConnectedException {
     URL url = config.resolveURLV3("configuration/preferences");
     restClient.execute(HttpMethod.PUT, url, GSON.toJson(preferences), null, config.getAccessToken());
   }

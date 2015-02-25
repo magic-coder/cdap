@@ -112,7 +112,7 @@ public class CLIMainTest extends StandaloneTestBase {
     programClient = new ProgramClient(cliConfig.getClientConfig());
     adapterClient = new AdapterClient(cliConfig.getClientConfig());
 
-    CLIMain cliMain = new CLIMain(cliConfig);
+    CLIMain cliMain = new CLIMain(cliConfig, autoconnect, credentials);
     cli = cliMain.getCLI();
 
     testCommandOutputContains(cli, "connect " + PROTOCOL + "://" + HOSTNAME + ":" + PORT, "Successfully connected");

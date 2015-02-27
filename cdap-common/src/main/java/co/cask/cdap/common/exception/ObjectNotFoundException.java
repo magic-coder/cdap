@@ -19,18 +19,11 @@ package co.cask.cdap.common.exception;
 import co.cask.cdap.proto.Id;
 
 /**
- * Thrown when a dataset was not found.
+ * Thrown when an element is not found
  */
-public class DatasetNotFoundException extends ObjectNotFoundException {
+public class ObjectNotFoundException extends NotFoundException {
 
-  private final Id.DatasetInstance dataset;
-
-  public DatasetNotFoundException(Id.DatasetInstance dataset) {
-    super(dataset);
-    this.dataset = dataset;
-  }
-
-  public Id.DatasetInstance getId() {
-    return dataset;
+  public ObjectNotFoundException(Id id) {
+    super(id.getType(), id.getId());
   }
 }

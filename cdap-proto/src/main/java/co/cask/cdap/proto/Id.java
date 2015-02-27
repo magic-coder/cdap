@@ -27,7 +27,7 @@ import com.google.common.collect.Iterables;
 /**
  * Contains collection of classes representing different types of Ids.
  */
-public final class Id  {
+public abstract class Id {
 
   private static boolean isId(String name) {
     return CharMatcher.inRange('A', 'Z')
@@ -50,10 +50,24 @@ public final class Id  {
       .or(CharMatcher.is('$')).matchesAllOf(datasetId);
   }
 
+  public abstract String getId();
+
+  public String getType() {
+    // TODO: refactor
+    return this.getClass().getSimpleName();
+  }
+
+  /**
+   * Indicates that the ID belongs to a namespace.
+   */
+  public static abstract class NamespacedId extends Id {
+    public abstract Namespace getNamespace();
+  }
+
   /**
    * Uniquely identifies a Namespace.
    */
-  public static final class Namespace {
+  public static final class Namespace extends Id {
     private final String id;
 
     public Namespace(String id) {
@@ -96,7 +110,7 @@ public final class Id  {
   /**
    * Uniquely identifies an Application.
    */
-  public static final class Application {
+  public static final class Application extends NamespacedId {
     private final Namespace namespace;
     private final String applicationId;
 
@@ -107,6 +121,7 @@ public final class Id  {
       this.applicationId = applicationId;
     }
 
+    @Override
     public Namespace getNamespace() {
       return namespace;
     }
@@ -153,7 +168,7 @@ public final class Id  {
   /**
    * Uniquely identifies an Adapter.
    */
-  public static final class Adapter {
+  public static final class Adapter extends NamespacedId {
     private final Namespace namespace;
     private final String adapterId;
 
@@ -164,6 +179,7 @@ public final class Id  {
       this.adapterId = adapterId;
     }
 
+    @Override
     public Namespace getNamespace() {
       return namespace;
     }
@@ -206,8 +222,9 @@ public final class Id  {
   /**
    * Uniquely identifies a Program.
    */
-  public static class Program {
+  public static class Program extends NamespacedId {
     private final Application application;
+    private final ProgramType type;
     private final String id;
 
     public Program(Application application, final String id) {
@@ -227,6 +244,10 @@ public final class Id  {
 
     public String getNamespaceId() {
       return application.getNamespaceId();
+    }
+
+    public Namespace getNamespace() {
+      return application.getNamespace();
     }
 
     public Application getApplication() {
@@ -295,7 +316,7 @@ public final class Id  {
   /**
    * Represents ID of a Schedule.
    */
-  public static class Schedule {
+  public static class Schedule extends NamespacedId {
 
     private final Program program;
     private final SchedulableProgramType schedulableProgramType;
@@ -323,6 +344,11 @@ public final class Id  {
     }
 
     @Override
+    public Namespace getNamespace() {
+      return program.getNamespace();
+    }
+
+    @Override
     public String toString() {
       return Objects.toStringHelper(this)
         .add("program", program)
@@ -338,7 +364,7 @@ public final class Id  {
   /**
    * Represents ID of a Notification feed.
    */
-  public static class NotificationFeed {
+  public static class NotificationFeed extends NamespacedId {
 
     private final Namespace namespace;
     private final String category;
@@ -393,6 +419,11 @@ public final class Id  {
 
     public String getDescription() {
       return description;
+    }
+
+    @Override
+    public Namespace getNamespace() {
+      return namespace;
     }
 
     /**
@@ -478,8 +509,8 @@ public final class Id  {
   /**
    * Id.Stream uniquely identifies a stream.
    */
-  public static final class Stream {
-    private final String namespace;
+  public static final class Stream extends NamespacedId {
+    private final Namespace namespace;
     private final String streamName;
     private transient int hashCode;
 
@@ -494,16 +525,17 @@ public final class Id  {
       Preconditions.checkArgument(isId(streamName),
                                   "Stream name can only contains alphanumeric, '-' and '_' characters only.");
 
-      this.namespace = namespace;
+      this.namespace = Id.Namespace.from(namespace);
       this.streamName = streamName;
     }
 
+    @Override
     public Namespace getNamespace() {
-      return Id.Namespace.from(namespace);
+      return namespace;
     }
 
     public String getNamespaceId() {
-      return namespace;
+      return namespace.getId();
     }
 
     public String getName() {
@@ -578,7 +610,7 @@ public final class Id  {
   /**
    * Dataset Type Id identifies a given dataset module.
    */
-  public static final class DatasetType {
+  public static final class DatasetType extends NamespacedId {
     private final Namespace namespace;
     private final String typeName;
 
@@ -591,6 +623,7 @@ public final class Id  {
       this.typeName = typeName;
     }
 
+    @Override
     public Namespace getNamespace() {
       return namespace;
     }
@@ -641,7 +674,7 @@ public final class Id  {
   /**
    * Dataset Module Id identifies a given dataset module.
    */
-  public static final class DatasetModule {
+  public static final class DatasetModule extends NamespacedId {
     private final Namespace namespace;
     private final String moduleId;
 
@@ -654,6 +687,7 @@ public final class Id  {
       this.moduleId = moduleId;
     }
 
+    @Override
     public Namespace getNamespace() {
       return namespace;
     }
@@ -704,7 +738,7 @@ public final class Id  {
   /**
    * Dataset Instance Id identifies a given dataset instance.
    */
-  public static final class DatasetInstance {
+  public static final class DatasetInstance extends NamespacedId {
     private final Namespace namespace;
     private final String instanceId;
 
@@ -717,6 +751,7 @@ public final class Id  {
       this.instanceId = instanceId;
     }
 
+    @Override
     public Namespace getNamespace() {
       return namespace;
     }

@@ -19,7 +19,7 @@ package co.cask.cdap.common.exception;
 /**
  * Thrown when a stream is not found
  */
-public class StreamNotFoundException extends NotFoundException {
+public class StreamNotFoundException extends ObjectNotFoundException {
 
   private final String streamId;
 

@@ -21,15 +21,10 @@ import co.cask.cdap.api.data.stream.StreamSpecification;
 import co.cask.cdap.api.dataset.table.Table;
 import co.cask.cdap.app.ApplicationSpecification;
 import co.cask.cdap.app.runtime.ProgramController;
-import co.cask.cdap.common.exception.AdapterNotFoundException;
-import co.cask.cdap.common.exception.ApplicationNotFoundException;
-import co.cask.cdap.common.exception.NamespaceAlreadyExistsException;
-import co.cask.cdap.common.exception.NamespaceNotFoundException;
 import co.cask.cdap.data2.dataset2.lib.table.MDSKey;
 import co.cask.cdap.data2.dataset2.lib.table.MetadataStoreDataset;
 import co.cask.cdap.internal.app.ApplicationSpecificationAdapter;
 import co.cask.cdap.internal.app.DefaultApplicationSpecification;
-import co.cask.cdap.internal.app.runtime.adapter.AdapterAlreadyExistsException;
 import co.cask.cdap.internal.app.runtime.adapter.AdapterStatus;
 import co.cask.cdap.proto.AdapterSpecification;
 import co.cask.cdap.proto.Id;
@@ -72,6 +67,7 @@ public class AppMetadataStore extends MetadataStoreDataset {
 
   public AppMetadataStore(Table table) {
     super(table);
+    this.appView
   }
 
   @Override
@@ -84,54 +80,42 @@ public class AppMetadataStore extends MetadataStoreDataset {
     return GSON.fromJson(Bytes.toString(serialized), classOfT);
   }
 
-  // ------------- Application API ---------------
-
-  public ApplicationMeta getApplication(Id.Application app) throws ApplicationNotFoundException {
-    ApplicationMeta appMeta = get(getAppKey(app), ApplicationMeta.class);
-    if (appMeta == null) {
-      throw new ApplicationNotFoundException(app);
-    }
-    return appMeta;
+  @Nullable
+  public ApplicationMeta getApplication(String namespaceId, String appId) {
+    return get(new MDSKey.Builder().add(TYPE_APP_META, namespaceId, appId).build(), ApplicationMeta.class);
   }
 
-  public List<ApplicationMeta> getAllApplications(Id.Namespace namespace) throws NamespaceNotFoundException {
-    List<ApplicationMeta> list = list(getAppsKey(namespace), ApplicationMeta.class);
-    if (list == null) {
-      throw new NamespaceNotFoundException(namespace);
-    }
-    return list;
+  public List<ApplicationMeta> getAllApplications(String namespaceId) {
+    return list(new MDSKey.Builder().add(TYPE_APP_META, namespaceId).build(), ApplicationMeta.class);
   }
 
-  public void writeApplication(Id.Application app, ApplicationSpecification spec,
+  public void writeApplication(String namespaceId, String appId, ApplicationSpecification spec,
                                String archiveLocation) {
     // NOTE: we use Gson underneath to do serde, as it doesn't serialize inner classes (which we use everywhere for
     //       specs - see forwarding specs), we want to wrap spec with DefaultApplicationSpecification
     spec = DefaultApplicationSpecification.from(spec);
-    write(getAppKey(app), new ApplicationMeta(app.getId(), spec, archiveLocation));
+    write(new MDSKey.Builder().add(TYPE_APP_META, namespaceId, appId).build(),
+          new ApplicationMeta(appId, spec, archiveLocation));
   }
 
-  public void deleteApplication(Id.Application app) throws NamespaceNotFoundException, ApplicationNotFoundException {
-    assertNamespaceExists(app.getNamespace());
-    assertAppExists(app);
-    deleteAll(getAppKey(app));
+  public void deleteApplication(String namespaceId, String appId) {
+    deleteAll(new MDSKey.Builder().add(TYPE_APP_META, namespaceId, appId).build());
   }
 
-  public void deleteApplications(Id.Namespace namespace) throws NamespaceNotFoundException {
-    assertNamespaceExists(namespace);
-    deleteAll(getAppsKey(namespace));
+  public void deleteApplications(String namespaceId) {
+    deleteAll(new MDSKey.Builder().add(TYPE_APP_META, namespaceId).build());
   }
 
   // todo: do we need appId? may be use from appSpec?
-  public void updateAppSpec(Id.Application app, ApplicationSpecification spec) {
+  public void updateAppSpec(String namespaceId, String appId, ApplicationSpecification spec) {
     // NOTE: we use Gson underneath to do serde, as it doesn't serialize inner classes (which we use everywhere for
     //       specs - see forwarding specs), we want to wrap spec with DefaultApplicationSpecification
     spec = DefaultApplicationSpecification.from(spec);
-    LOG.trace("App spec to be updated: id: {}: spec: {}", app.getId(), GSON.toJson(spec));
-    MDSKey key = getAppKey(app);
-
+    LOG.trace("App spec to be updated: id: {}: spec: {}", appId, GSON.toJson(spec));
+    MDSKey key = new MDSKey.Builder().add(TYPE_APP_META, namespaceId, appId).build();
     ApplicationMeta existing = get(key, ApplicationMeta.class);
     if (existing == null) {
-      String msg = String.format("No meta for namespace %s app %s exists", app.getNamespaceId(), app.getId());
+      String msg = String.format("No meta for namespace %s app %s exists", namespaceId, appId);
       LOG.error(msg);
       throw new IllegalArgumentException(msg);
     }
@@ -140,41 +124,9 @@ public class AppMetadataStore extends MetadataStoreDataset {
     ApplicationMeta updated = ApplicationMeta.updateSpec(existing, spec);
     write(key, updated);
 
-    for (StreamSpecification streamSpec : spec.getStreams().values()) {
-      writeStream(app.getNamespace(), streamSpec);
+    for (StreamSpecification stream : spec.getStreams().values()) {
+      writeStream(namespaceId, stream);
     }
-  }
-
-  private MDSKey getAppKey(Id.Application app) {
-    return new MDSKey.Builder().add(TYPE_APP_META, app.getNamespaceId(), app.getId()).build();
-  }
-
-  private MDSKey getAppsKey(Id.Namespace namespace) {
-    return new MDSKey.Builder().add(TYPE_APP_META, namespace.getId()).build();
-  }
-
-  private void assertAppExists(Id.Application application) throws ApplicationNotFoundException {
-    if (!appExists(application)) {
-      throw new ApplicationNotFoundException(application);
-    }
-  }
-
-  private void assertAppNotExists(Id.Adapter adapter) throws AdapterAlreadyExistsException {
-    if (!adapterExists(adapter)) {
-      throw new AdapterAlreadyExistsException(adapter);
-    }
-  }
-
-  private boolean appExists(Id.Application application) {
-    return exists(getAppKey(application));
-  }
-
-  private ApplicationMeta getAppMeta(Id.Application app) throws ApplicationNotFoundException {
-    ApplicationMeta appMeta = get(getAppKey(app), ApplicationMeta.class);
-    if (appMeta == null) {
-      throw new ApplicationNotFoundException(app);
-    }
-    return appMeta;
   }
 
   public void recordProgramStart(String namespaceId, String appId, String programId, String pid, long startTs) {
@@ -254,20 +206,9 @@ public class AppMetadataStore extends MetadataStoreDataset {
     return Long.MAX_VALUE - endTime;
   }
 
-  public void writeStream(Id.Namespace namespace, StreamSpecification spec) {
-    write(getStreamsKey(namespace).build(), spec);
+  public void writeStream(String namespaceId, StreamSpecification spec) {
+    write(new MDSKey.Builder().add(TYPE_STREAM, namespaceId, spec.getName()).build(), spec);
   }
-
-  private MDSKey getNamespaceKey(Id.Namespace namespace) {
-    MDSKey.Builder builder = new MDSKey.Builder().add(TYPE_NAMESPACE);
-    builder.add(namespace.getId());
-    return builder.build();
-  }
-
-  private MDSKey getNamespacesKey() {
-    return new MDSKey.Builder().add(TYPE_NAMESPACE).build();
-  }
-
 
   public StreamSpecification getStream(String namespaceId, String name) {
     return get(new MDSKey.Builder().add(TYPE_STREAM, namespaceId, name).build(), StreamSpecification.class);
@@ -315,142 +256,78 @@ public class AppMetadataStore extends MetadataStoreDataset {
     deleteAll(new MDSKey.Builder().add(TYPE_RUN_RECORD_COMPLETED, namespaceId).build());
   }
 
-  public void createNamespace(NamespaceMeta metadata) throws NamespaceAlreadyExistsException {
-    Id.Namespace namespace = Id.Namespace.from(metadata.getId());
-    assertNamespaceNotExists(namespace);
-    write(getNamespaceKey(namespace), metadata);
+  public void createNamespace(NamespaceMeta metadata) {
+    write(getNamespaceKey(metadata.getId()), metadata);
   }
 
-  public NamespaceMeta getNamespace(Id.Namespace namespace) throws NamespaceNotFoundException {
-    NamespaceMeta namespaceMeta = get(getNamespaceKey(namespace), NamespaceMeta.class);
-    if (namespaceMeta == null) {
-      throw new NamespaceNotFoundException(namespace);
-    }
-    return namespaceMeta;
+  public NamespaceMeta getNamespace(Id.Namespace id) {
+    return get(getNamespaceKey(id.getId()), NamespaceMeta.class);
   }
 
-  public void deleteNamespace(Id.Namespace id) throws NamespaceNotFoundException {
-    assertNamespaceExists(id);
-    deleteAll(getNamespaceKey(id));
+  public void deleteNamespace(Id.Namespace id) {
+    deleteAll(getNamespaceKey(id.getId()));
   }
 
   public List<NamespaceMeta> listNamespaces() {
-    return list(getNamespacesKey(), NamespaceMeta.class);
+    return list(getNamespaceKey(null), NamespaceMeta.class);
   }
 
-  public void createAdapter(Id.Adapter adapter, AdapterSpecification adapterSpec,
-                            AdapterStatus adapterStatus) throws AdapterAlreadyExistsException {
-    assertAdapterNotExists(adapter);
-    write(getAdapterKey(adapter), new AdapterMeta(adapterSpec, adapterStatus));
+  public void writeAdapter(Id.Namespace id, AdapterSpecification adapterSpec, AdapterStatus adapterStatus) {
+    write(new MDSKey.Builder().add(TYPE_ADAPTER, id.getId(), adapterSpec.getName()).build(),
+          new AdapterMeta(adapterSpec, adapterStatus));
   }
 
-  public void updateAdapter(Id.Adapter adapter, AdapterSpecification adapterSpec,
-                            AdapterStatus adapterStatus) throws AdapterNotFoundException {
-    assertAdapterExists(adapter);
-    write(getAdapterKey(adapter), new AdapterMeta(adapterSpec, adapterStatus));
-  }
 
-  public AdapterSpecification getAdapterSpec(Id.Adapter adapter) throws AdapterNotFoundException {
-    AdapterMeta adapterMeta = getAdapterMeta(adapter);
-    return adapterMeta.getSpec();
-  }
-
-  public AdapterStatus getAdapterStatus(Id.Adapter adapter) throws AdapterNotFoundException {
-    AdapterMeta adapterMeta = getAdapterMeta(adapter);
-    if (adapterMeta == null) {
-      throw new AdapterNotFoundException(adapter);
-    }
-    return adapterMeta.getStatus();
+  @Nullable
+  public AdapterSpecification getAdapter(Id.Namespace id, String name) {
+    AdapterMeta adapterMeta = getAdapterMeta(id, name);
+    return adapterMeta == null ?  null : adapterMeta.getSpec();
   }
 
   @Nullable
-  public AdapterStatus updateAdapterStatus(Id.Adapter adapter, AdapterStatus status) throws AdapterNotFoundException {
-    AdapterMeta adapterMeta = getAdapterMeta(adapter);
+  public AdapterStatus getAdapterStatus(Id.Namespace id, String name) {
+    AdapterMeta adapterMeta = getAdapterMeta(id, name);
+    return adapterMeta == null ?  null : adapterMeta.getStatus();
+  }
+
+  @Nullable
+  public AdapterStatus setAdapterStatus(Id.Namespace id, String name, AdapterStatus status) {
+    AdapterMeta adapterMeta = getAdapterMeta(id, name);
+    if (adapterMeta == null) {
+      return null;
+    }
     AdapterStatus previousStatus = adapterMeta.getStatus();
-    AdapterSpecification adapterSpec = getAdapterSpec(adapter);
-    updateAdapter(adapter, adapterSpec, status);
+    writeAdapter(id, adapterMeta.getSpec(), status);
     return previousStatus;
   }
 
-  public List<AdapterSpecification> getAllAdapters(Id.Namespace namespace) throws NamespaceNotFoundException {
-    assertNamespaceExists(namespace);
+  private AdapterMeta getAdapterMeta(Id.Namespace id, String name) {
+    return get(new MDSKey.Builder().add(TYPE_ADAPTER, id.getId(), name).build(), AdapterMeta.class);
+  }
+
+  public List<AdapterSpecification> getAllAdapters(Id.Namespace id) {
     List<AdapterSpecification> adapterSpecs = Lists.newArrayList();
-    List<AdapterMeta> adapterMetas = list(getAdaptersKey(namespace), AdapterMeta.class);
+    List<AdapterMeta> adapterMetas = list(new MDSKey.Builder().add(TYPE_ADAPTER, id.getId()).build(),
+                                          AdapterMeta.class);
     for (AdapterMeta adapterMeta : adapterMetas) {
       adapterSpecs.add(adapterMeta.getSpec());
     }
     return adapterSpecs;
   }
 
-  // ------------- Namespace helpers ---------------
+  public void deleteAdapter(Id.Namespace id, String name) {
+    deleteAll(new MDSKey.Builder().add(TYPE_ADAPTER, id.getId(), name).build());
+  }
 
-  private MDSKey getNamespaceKey(Id.Namespace namespace) {
+  public void deleteAllAdapters(Id.Namespace id) {
+    deleteAll(new MDSKey.Builder().add(TYPE_ADAPTER, id.getId()).build());
+  }
+
+  private MDSKey getNamespaceKey(@Nullable String name) {
     MDSKey.Builder builder = new MDSKey.Builder().add(TYPE_NAMESPACE);
-    builder.add(namespace.getId());
+    if (null != name) {
+      builder.add(name);
+    }
     return builder.build();
-  }
-
-  private MDSKey getNamespacesKey() {
-    return new MDSKey.Builder().add(TYPE_NAMESPACE).build();
-  }
-
-  private void assertNamespaceExists(Id.Namespace namespace) throws NamespaceNotFoundException {
-    if (!namespaceExists(namespace)) {
-      throw new NamespaceNotFoundException(namespace);
-    }
-  }
-
-  private void assertNamespaceNotExists(Id.Namespace namespace) throws NamespaceAlreadyExistsException {
-    if (namespaceExists(namespace)) {
-      throw new NamespaceAlreadyExistsException(namespace);
-    }
-  }
-
-  private boolean namespaceExists(Id.Namespace namespace) {
-    return exists(getNamespaceKey(namespace));
-  }
-
-  // ------------- Adapter helpers ---------------
-
-  private MDSKey getAdaptersKey(Id.Namespace namespace) {
-    return new MDSKey.Builder().add(TYPE_ADAPTER, namespace.getId()).build();
-  }
-
-  private MDSKey getAdapterKey(Id.Adapter adapter) {
-    return new MDSKey.Builder().add(TYPE_ADAPTER, adapter.getNamespaceId(), adapter.getId()).build();
-  }
-
-  public void deleteAdapter(Id.Adapter adapter) throws AdapterNotFoundException {
-    assertAdapterExists(adapter);
-    deleteAll(getAdapterKey(adapter));
-  }
-
-  public void deleteAllAdapters(Id.Namespace namespace) throws NamespaceNotFoundException {
-    assertNamespaceExists(namespace);
-    deleteAll(getAdaptersKey(namespace));
-  }
-
-  private void assertAdapterExists(Id.Adapter adapter) throws AdapterNotFoundException {
-    if (!adapterExists(adapter)) {
-      throw new AdapterNotFoundException(adapter);
-    }
-  }
-
-  private void assertAdapterNotExists(Id.Adapter adapter) throws AdapterAlreadyExistsException {
-    if (!adapterExists(adapter)) {
-      throw new AdapterAlreadyExistsException(adapter);
-    }
-  }
-
-  private boolean adapterExists(Id.Adapter adapter) {
-    return exists(getAdapterKey(adapter));
-  }
-
-  private AdapterMeta getAdapterMeta(Id.Adapter adapter) throws AdapterNotFoundException {
-    AdapterMeta adapterMeta = get(getAdapterKey(adapter), AdapterMeta.class);
-    if (adapterMeta == null) {
-      throw new AdapterNotFoundException(adapter);
-    }
-    return adapterMeta;
   }
 }

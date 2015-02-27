@@ -21,7 +21,7 @@ import co.cask.cdap.proto.ProgramType;
 /**
  * Thrown when a program is not found
  */
-public class ProgramNotFoundException extends NotFoundException {
+public class ProgramNotFoundException extends ObjectNotFoundException {
 
   private ProgramType programType;
   private String appId;

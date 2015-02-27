@@ -196,6 +196,11 @@ public final class MDSKey {
       return this;
     }
 
+    public Builder add(MDSKey other) {
+      key = Bytes.add(key, other.getKey());
+      return this;
+    }
+
     public MDSKey build() {
       return new MDSKey(key);
     }

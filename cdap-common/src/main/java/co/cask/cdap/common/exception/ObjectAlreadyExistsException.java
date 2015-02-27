@@ -19,18 +19,16 @@ package co.cask.cdap.common.exception;
 import co.cask.cdap.proto.Id;
 
 /**
- * Thrown when a dataset was not found.
+ * Thrown when an element already exists.
  */
-public class DatasetNotFoundException extends ObjectNotFoundException {
+public class ObjectAlreadyExistsException extends AlreadyExistsException {
 
-  private final Id.DatasetInstance dataset;
-
-  public DatasetNotFoundException(Id.DatasetInstance dataset) {
-    super(dataset);
-    this.dataset = dataset;
+  public ObjectAlreadyExistsException(Id id) {
+    super(id.getType(), id.getId());
   }
 
-  public Id.DatasetInstance getId() {
-    return dataset;
+  @Deprecated
+  public ObjectAlreadyExistsException(String type, String id) {
+    super(type, id);
   }
 }

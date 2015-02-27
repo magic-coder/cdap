@@ -21,12 +21,12 @@ import co.cask.cdap.proto.Id;
 /**
  * Thrown when the user tries to create a schedule that already exists.
  */
-public class ScheduleAlreadyExistsException extends AlreadyExistsException {
+public class ScheduleAlreadyExistsException extends ObjectAlreadyExistsException {
 
   private final Id.Schedule schedule;
 
   public ScheduleAlreadyExistsException(Id.Schedule schedule) {
-    super("schedule", schedule.toString());
+    super(schedule);
     this.schedule = schedule;
   }
 

@@ -16,6 +16,8 @@
 
 package co.cask.cdap.common.exception;
 
+import co.cask.cdap.proto.Id;
+
 /**
  * Thrown when an adapter was not found.
  */
@@ -26,6 +28,10 @@ public class AdapterNotFoundException extends NotFoundException {
   public AdapterNotFoundException(String adapterName) {
     super("adapter", adapterName);
     this.adapterName = adapterName;
+  }
+
+  public AdapterNotFoundException(Id.Adapter adapter) {
+    this(adapter.toString());
   }
 
   /**

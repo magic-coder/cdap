@@ -26,7 +26,10 @@ import co.cask.cdap.app.ApplicationSpecification;
 import co.cask.cdap.app.program.Program;
 import co.cask.cdap.app.runtime.ProgramController;
 import co.cask.cdap.common.exception.ApplicationNotFoundException;
+import co.cask.cdap.common.exception.BadRequestException;
 import co.cask.cdap.common.exception.NamespaceNotFoundException;
+import co.cask.cdap.common.exception.ScheduleAlreadyExistsException;
+import co.cask.cdap.common.exception.ScheduleNotFoundException;
 import co.cask.cdap.internal.app.runtime.adapter.AdapterStatus;
 import co.cask.cdap.proto.AdapterSpecification;
 import co.cask.cdap.proto.Id;
@@ -156,7 +159,7 @@ public interface Store {
    * @return application archive location
    */
   @Nullable
-  Location getApplicationArchiveLocation(Id.Application id);
+  Location getApplicationArchiveLocation(Id.Application id) throws ApplicationNotFoundException;
 
   /**
    * Sets number of instances of specific flowlet.
@@ -282,30 +285,33 @@ public interface Store {
 
   /**
    * Changes input stream for a flowlet connection
+   *
    * @param flow defines flow that contains a flowlet which connection to change
    * @param flowletId flowlet which connection to change
    * @param oldValue name of the stream in stream connection to change
    * @param newValue name of the new stream to connect to
    */
-  void changeFlowletSteamConnection(Id.Program flow, String flowletId, String oldValue, String newValue);
+  void changeFlowletSteamConnection(Id.Program flow, String flowletId, String oldValue, String newValue) throws BadRequestException;
+
   /**
    * Adds a schedule for a particular program. If the schedule with the name already exists, the method will
    * throw RuntimeException.
+   *
    * @param program defines program to which a schedule is being added
    * @param scheduleSpecification defines the schedule to be added for the program
    */
-  void addSchedule(Id.Program program, ScheduleSpecification scheduleSpecification);
+  void addSchedule(Id.Program program, ScheduleSpecification scheduleSpecification) throws ScheduleAlreadyExistsException;
 
   /**
-   * Deletes a schedules from a particular program
-   * @param program defines program from which a schedule is being deleted
-   * @param programType defines the type of the program
-   * @param scheduleName the name of the schedule to be removed from the program
+   * Deletes a schedule from a particular program.
+   *
+   * @param schedule the schedule to delete
    */
-  void deleteSchedule(Id.Program program, SchedulableProgramType programType, String scheduleName);
+  void deleteSchedule(Id.Schedule schedule) throws ScheduleNotFoundException;
 
   /**
    * Check if a program exists.
+   *
    * @param id id of program.
    * @param type type of program.
    * @return true if the program exists, false otherwise.
@@ -366,7 +372,7 @@ public interface Store {
    * @return an instance of {@link AdapterSpecification}.
    */
   @Nullable
-  AdapterSpecification getAdapter(Id.Namespace id, String name);
+  AdapterSpecification getAdapter(Id.Adapter adapter);
 
   /**
    * Fetch the status for an adapter identified by the name in a give namespace.
@@ -376,18 +382,17 @@ public interface Store {
    * @return status of specified adapter.
    */
   @Nullable
-  AdapterStatus getAdapterStatus(Id.Namespace id, String name);
+  AdapterStatus getAdapterStatus(Id.Adapter adapter);
 
   /**
    * Set the status for an adapter identified by the name in a give namespace.
    *
-   * @param id  Namespace id.
-   * @param name Adapter name
+   * @param adapter Adapter name
    * @param status Status to set
    * @return previous status of adapter, or null if specified adapter is not found.
    */
   @Nullable
-  AdapterStatus setAdapterStatus(Id.Namespace id, String name, AdapterStatus status);
+  AdapterStatus setAdapterStatus(Id.Adapter adapter, AdapterStatus status);
 
   /**
    * Fetch all the adapters in a given namespace.
@@ -395,7 +400,7 @@ public interface Store {
    * @param id Namespace id.
    * @return {@link Collection} of Adapter Specifications.
    */
-  Collection<AdapterSpecification> getAllAdapters(Id.Namespace id);
+  Collection<AdapterSpecification> getAllAdapters(Id.Namespace id) throws NamespaceNotFoundException;
 
   /**
    * Remove the adapter specified by the name in a given namespace.
@@ -403,13 +408,12 @@ public interface Store {
    * @param id Namespace id.
    * @param name Adapter name.
    */
-  void removeAdapter(Id.Namespace id, String name);
+  void removeAdapter(Id.Adapter adapter);
 
   /**
    * Remove all the adapters in a given namespace.
    *
    * @param id Namespace id.
    */
-  void removeAllAdapters(Id.Namespace id);
-
+  void removeAllAdapters(Id.Namespace id) throws NamespaceNotFoundException;
 }

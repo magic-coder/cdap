@@ -177,15 +177,11 @@ public class AppLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
   public BodyConsumer deploy(HttpRequest request, HttpResponder responder,
                              @PathParam("namespace-id") final String namespaceId,
                              @PathParam("app-id") final String appId,
-                             @HeaderParam(ARCHIVE_NAME_HEADER) final String archiveName) {
+                             @HeaderParam(ARCHIVE_NAME_HEADER) final String archiveName)
+    throws IOException, NamespaceNotFoundException {
 
-    try {
-      Id.Namespace namespace = Id.Namespace.from(namespaceId);
-      return deployApplication(request, responder, namespace, appId, archiveName);
-    } catch (Throwable t) {
-      exceptionHandler.handle(t, request, responder, LOG);
-      return null;
-    }
+    Id.Namespace namespace = Id.Namespace.from(namespaceId);
+    return deployApplication(request, responder, namespace, appId, archiveName);
   }
 
   /**
@@ -195,14 +191,11 @@ public class AppLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
   @Path("/apps")
   public BodyConsumer deploy(HttpRequest request, HttpResponder responder,
                              @PathParam("namespace-id") final String namespaceId,
-                             @HeaderParam(ARCHIVE_NAME_HEADER) final String archiveName) {
-    try {
-      Id.Namespace namespace = Id.Namespace.from(namespaceId);
-      return deployApplication(request, responder, namespace, null, archiveName);
-    } catch (Throwable t) {
-      exceptionHandler.handle(t, request, responder, LOG);
-      return null;
-    }
+                             @HeaderParam(ARCHIVE_NAME_HEADER) final String archiveName)
+    throws IOException, NamespaceNotFoundException {
+
+    Id.Namespace namespace = Id.Namespace.from(namespaceId);
+    return deployApplication(request, responder, namespace, null, archiveName);
   }
 
   /**
@@ -210,15 +203,10 @@ public class AppLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
    */
   @GET
   @Path("/apps")
-  public void getAllApps(HttpRequest request, HttpResponder responder,
-                         @PathParam("namespace-id") String namespaceId) {
-    try {
-      Id.Namespace namespace = Id.Namespace.from(namespaceId);
-      Collection<ApplicationSpecification> appSpecs = appLifecycleService.listApps(namespace);
-      responder.sendJson(HttpResponseStatus.OK, makeAppRecords(appSpecs));
-    } catch (Throwable t) {
-      exceptionHandler.handle(t, request, responder, LOG);
-    }
+  public void listApps(HttpRequest request, HttpResponder responder, @PathParam("namespace-id") String namespaceId) throws NamespaceNotFoundException {
+    Id.Namespace namespace = Id.Namespace.from(namespaceId);
+    Collection<ApplicationSpecification> appSpecs = appLifecycleService.listApps(namespace);
+    responder.sendJson(HttpResponseStatus.OK, makeAppRecords(appSpecs));
   }
 
   /**
@@ -228,14 +216,10 @@ public class AppLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
   @Path("/apps/{app-id}")
   public void getApp(HttpRequest request, HttpResponder responder,
                      @PathParam("namespace-id") String namespaceId,
-                     @PathParam("app-id") final String appId) {
-    try {
-      Id.Application app = Id.Application.from(namespaceId, appId);
-      ApplicationSpecification appSpec = appLifecycleService.getApp(app);
-      responder.sendJson(HttpResponseStatus.OK, makeAppRecord(appSpec));
-    } catch (Throwable t) {
-      exceptionHandler.handle(t, request, responder, LOG);
-    }
+                     @PathParam("app-id") final String appId) throws ApplicationNotFoundException {
+    Id.Application app = Id.Application.from(namespaceId, appId);
+    ApplicationSpecification appSpec = appLifecycleService.getApp(app);
+    responder.sendJson(HttpResponseStatus.OK, makeAppRecord(appSpec));
   }
 
   /**
@@ -245,24 +229,18 @@ public class AppLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
   @Path("/apps/{app-id}")
   public void deleteApp(HttpRequest request, HttpResponder responder,
                         @PathParam("namespace-id") String namespaceId,
-                        @PathParam("app-id") final String appId) {
-    try {
-      Id.Application id = Id.Application.from(namespaceId, appId);
+                        @PathParam("app-id") final String appId) throws Exception {
+    Id.Application id = Id.Application.from(namespaceId, appId);
 
-      // Deletion of a particular application is not allowed if that application is used by an adapter
-      if (adapterService.getAdapterTypeInfo(appId) != null) {
-        responder.sendString(HttpResponseStatus.CONFLICT,
-                             String.format("Cannot delete Application '%s' because it's an Adapter Type", appId));
-        return;
-      }
-
-      AppFabricServiceStatus appStatus = appLifecycleService.deleteApp(id);
-      // TODO: this should be replaced by common trace for all HTTP requests
-      LOG.trace("Delete call for Application {} at AppFabricHttpHandler", appId);
-      responder.sendString(appStatus.getCode(), appStatus.getMessage());
-    } catch (Throwable t) {
-      exceptionHandler.handle(t, request, responder, LOG);
+    // Deletion of a particular application is not allowed if that application is used by an adapter
+    if (adapterService.getAdapterTypeInfo(appId) != null) {
+      responder.sendString(HttpResponseStatus.CONFLICT,
+                           String.format("Cannot delete Application '%s' because it's an Adapter Type", appId));
+      return;
     }
+
+    AppFabricServiceStatus appStatus = appLifecycleService.deleteApp(id);
+    responder.sendString(appStatus.getCode(), appStatus.getMessage());
   }
 
   /**
@@ -271,16 +249,10 @@ public class AppLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
   @DELETE
   @Path("/apps")
   public void deleteApps(HttpRequest request, HttpResponder responder,
-                            @PathParam("namespace-id") String namespaceId) {
-    try {
-      Id.Namespace id = Id.Namespace.from(namespaceId);
-      AppFabricServiceStatus status = appLifecycleService.deleteApps(id);
-      // TODO: this should be replaced by common trace for all HTTP requests
-      LOG.trace("Delete all call at AppFabricHttpHandler");
-      responder.sendString(status.getCode(), status.getMessage());
-    } catch (Throwable t) {
-      exceptionHandler.handle(t, request, responder, LOG);
-    }
+                            @PathParam("namespace-id") String namespaceId) throws Exception {
+    Id.Namespace id = Id.Namespace.from(namespaceId);
+    AppFabricServiceStatus status = appLifecycleService.deleteApps(id);
+    responder.sendString(status.getCode(), status.getMessage());
   }
 
   /**
@@ -289,13 +261,8 @@ public class AppLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
   @GET
   @Path("/adapters")
   public void listAdapters(HttpRequest request, HttpResponder responder,
-                           @PathParam("namespace-id") String namespaceId) {
-    if (!namespaceAdmin.hasNamespace(Id.Namespace.from(namespaceId))) {
-      responder.sendString(HttpResponseStatus.NOT_FOUND,
-                           String.format("Namespace '%s' does not exist.", namespaceId));
-      return;
-    }
-    responder.sendJson(HttpResponseStatus.OK, adapterService.getAdapters(namespaceId));
+                           @PathParam("namespace-id") String namespaceId) throws NamespaceNotFoundException {
+    responder.sendJson(HttpResponseStatus.OK, adapterService.getAdapters(Id.Namespace.from(namespaceId)));
   }
 
   /**
@@ -305,13 +272,9 @@ public class AppLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
   @Path("/adapters/{adapter-id}")
   public void getAdapter(HttpRequest request, HttpResponder responder,
                          @PathParam("namespace-id") String namespaceId,
-                         @PathParam("adapter-id") String adapterName) {
-    try {
-      AdapterSpecification adapterSpec = adapterService.getAdapter(namespaceId, adapterName);
-      responder.sendJson(HttpResponseStatus.OK, adapterSpec);
-    } catch (AdapterNotFoundException e) {
-      responder.sendString(HttpResponseStatus.NOT_FOUND, e.getMessage());
-    }
+                         @PathParam("adapter-id") String adapterName) throws AdapterNotFoundException {
+    AdapterSpecification adapterSpec = adapterService.getAdapter(namespaceId, adapterName);
+    responder.sendJson(HttpResponseStatus.OK, adapterSpec);
   }
 
   /**
@@ -355,12 +318,8 @@ public class AppLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
   @Path("/adapters/{adapter-id}/status")
   public void getAdapterStatus(HttpRequest request, HttpResponder responder,
                                @PathParam("namespace-id") String namespaceId,
-                               @PathParam("adapter-id") String adapterId) {
-    try {
-      responder.sendString(HttpResponseStatus.OK, adapterService.getAdapterStatus(namespaceId, adapterId).toString());
-    } catch (AdapterNotFoundException e) {
-      responder.sendString(HttpResponseStatus.NOT_FOUND, e.getMessage());
-    }
+                               @PathParam("adapter-id") String adapterId) throws AdapterNotFoundException {
+    responder.sendString(HttpResponseStatus.OK, adapterService.getAdapterStatus(namespaceId, adapterId).toString());
   }
 
   /**
@@ -370,21 +329,9 @@ public class AppLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
   @Path("/adapters/{adapter-id}")
   public void deleteAdapter(HttpRequest request, HttpResponder responder,
                             @PathParam("namespace-id") String namespaceId,
-                            @PathParam("adapter-id") String adapterName) {
-    try {
-      adapterService.removeAdapter(namespaceId, adapterName);
-      responder.sendStatus(HttpResponseStatus.OK);
-    } catch (NotFoundException e) {
-      responder.sendString(HttpResponseStatus.NOT_FOUND, e.getMessage());
-    } catch (SchedulerException e) {
-      LOG.error("Scheduler error in namespace '{}' for adapter '{}' with action '{}'",
-                namespaceId, adapterName, "delete", e);
-      responder.sendStatus(HttpResponseStatus.INTERNAL_SERVER_ERROR);
-    } catch (Throwable t) {
-      LOG.error("Error in namespace '{}' for adapter '{}' with action '{}'",
-                namespaceId, adapterName, "delete", t);
-      responder.sendStatus(HttpResponseStatus.INTERNAL_SERVER_ERROR);
-    }
+                            @PathParam("adapter-id") String adapterName) throws NotFoundException, SchedulerException {
+    adapterService.removeAdapter(namespaceId, adapterName);
+    responder.sendStatus(HttpResponseStatus.OK);
   }
 
   /**
@@ -505,7 +452,7 @@ public class AppLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
           appLifecycleService.deploy(namespace, appId, deploymentInfo);
           responder.sendStatus(HttpResponseStatus.OK);
         } catch (Throwable t) {
-          exceptionHandler.handle(t, request, responder, LOG);
+          exceptionHandler.handle(t, request, responder);
         }
       }
     };

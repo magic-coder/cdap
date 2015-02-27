@@ -59,25 +59,30 @@ public class MetadataStoreDataset extends AbstractDataset {
     return GSON.fromJson(Bytes.toString(serialized), classOfT);
   }
 
-  // returns first that matches
   @Nullable
   public <T> T get(MDSKey id, Class<T> classOfT) {
-    try {
-      Scanner scan = table.scan(id.getKey(), Bytes.stopKeyForPrefix(id.getKey()));
-      Row row = scan.next();
-      if (row == null || row.isEmpty()) {
-        return null;
-      }
+    return deserialize(getRaw(id), classOfT);
+  }
 
-      byte[] value = row.get(COLUMN);
-      if (value == null) {
-        return null;
-      }
-
-      return deserialize(value, classOfT);
-    } catch (Exception e) {
-      throw Throwables.propagate(e);
+  // returns first that matches
+  @Nullable
+  public byte[] getRaw(MDSKey id) {
+    Scanner scan = table.scan(id.getKey(), Bytes.stopKeyForPrefix(id.getKey()));
+    Row row = scan.next();
+    if (row == null || row.isEmpty()) {
+      return null;
     }
+
+    byte[] value = row.get(COLUMN);
+    if (value == null) {
+      return null;
+    }
+
+    return value;
+  }
+
+  public boolean exists(MDSKey id) {
+    return getRaw(id) != null;
   }
 
   // lists all that has same first id parts
@@ -134,7 +139,7 @@ public class MetadataStoreDataset extends AbstractDataset {
     }
   }
 
-  public <T> void deleteAll(MDSKey id) {
+  public void deleteAll(MDSKey id) {
     byte[] prefix = id.getKey();
     byte[] stopKey = Bytes.stopKeyForPrefix(prefix);
 

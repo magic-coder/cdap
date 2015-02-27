@@ -16,6 +16,7 @@
 
 package co.cask.cdap.proto;
 
+import co.cask.cdap.api.schedule.SchedulableProgramType;
 import com.google.common.base.CharMatcher;
 import com.google.common.base.Charsets;
 import com.google.common.base.Objects;
@@ -50,7 +51,7 @@ public final class Id  {
   }
 
   /**
-   * Represents ID of a namespace.
+   * Uniquely identifies a Namespace.
    */
   public static final class Namespace {
     private final String id;
@@ -93,16 +94,15 @@ public final class Id  {
   }
 
   /**
-   * Application Id identifies a given application.
-   * Application is global unique if used within context of namespace.
+   * Uniquely identifies an Application.
    */
   public static final class Application {
     private final Namespace namespace;
     private final String applicationId;
 
     public Application(final Namespace namespace, final String applicationId) {
-      Preconditions.checkNotNull(namespace, "Namespace cannot be null.");
-      Preconditions.checkNotNull(applicationId, "Application cannot be null.");
+      Preconditions.checkNotNull(namespace, "namespace cannot be null.");
+      Preconditions.checkNotNull(applicationId, "applicationId cannot be null.");
       this.namespace = namespace;
       this.applicationId = applicationId;
     }
@@ -137,26 +137,82 @@ public final class Id  {
       return Objects.hashCode(namespace, applicationId);
     }
 
-    public static Application from(Namespace id, String application) {
-      return new Application(id, application);
+    public static Application from(Namespace id, String applicationId) {
+      return new Application(id, applicationId);
     }
 
     public static Application from(String namespaceId, String applicationId) {
       return new Application(Namespace.from(namespaceId), applicationId);
     }
+
+    public static Application from(Adapter adapter, String adapterSpecType) {
+      return new Application(adapter.getNamespace(), adapterSpecType);
+    }
   }
 
   /**
-   * Program Id identifies a given program.
-   * Program is global unique if used within context of namespace and application.
+   * Uniquely identifies an Adapter.
+   */
+  public static final class Adapter {
+    private final Namespace namespace;
+    private final String adapterId;
+
+    public Adapter(final Namespace namespace, final String adapterId) {
+      Preconditions.checkNotNull(namespace, "namespace cannot be null.");
+      Preconditions.checkNotNull(adapterId, "adapterId cannot be null.");
+      this.namespace = namespace;
+      this.adapterId = adapterId;
+    }
+
+    public Namespace getNamespace() {
+      return namespace;
+    }
+
+    public String getNamespaceId() {
+      return namespace.getId();
+    }
+
+    public String getId() {
+      return adapterId;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+
+      Adapter that = (Adapter) o;
+      return namespace.equals(that.namespace) && adapterId.equals(that.adapterId);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hashCode(namespace, adapterId);
+    }
+
+    public static Adapter from(Namespace id, String adapterId) {
+      return new Adapter(id, adapterId);
+    }
+
+    public static Adapter from(String namespaceId, String adapterId) {
+      return new Adapter(Namespace.from(namespaceId), adapterId);
+    }
+  }
+
+  /**
+   * Uniquely identifies a Program.
    */
   public static class Program {
     private final Application application;
     private final String id;
 
     public Program(Application application, final String id) {
-      Preconditions.checkNotNull(application, "Application cannot be null.");
-      Preconditions.checkNotNull(id, "Id cannot be null.");
+      Preconditions.checkNotNull(application, "application cannot be null.");
+      Preconditions.checkNotNull(id, "id cannot be null.");
       this.application = application;
       this.id = id;
     }
@@ -205,6 +261,10 @@ public final class Id  {
       return new Program(new Application(new Namespace(namespaceId), appId), pgmId);
     }
 
+    public static Program from(Id.Namespace namespaceId, String appId, String pgmId) {
+      return new Program(new Application(namespaceId, appId), pgmId);
+    }
+
     @Override
     public String toString() {
       StringBuilder sb = new StringBuilder("ProgramId(");
@@ -229,6 +289,49 @@ public final class Id  {
       }
       sb.append(")");
       return sb.toString();
+    }
+  }
+
+  /**
+   * Represents ID of a Schedule.
+   */
+  public static class Schedule {
+
+    private final Program program;
+    private final SchedulableProgramType schedulableProgramType;
+    private final String id;
+
+    private Schedule(Program program, SchedulableProgramType schedulableProgramType, String id) {
+      Preconditions.checkArgument(program != null, "program cannot be null.");
+      Preconditions.checkArgument(schedulableProgramType != null, "schedulableProgramType cannot be null.");
+      Preconditions.checkArgument(id != null && !id.isEmpty(), "id cannot be null or empty.");
+      this.program = program;
+      this.schedulableProgramType = schedulableProgramType;
+      this.id = id;
+    }
+
+    public Program getProgram() {
+      return program;
+    }
+
+    public SchedulableProgramType getSchedulableProgramType() {
+      return schedulableProgramType;
+    }
+
+    public String getId() {
+      return id;
+    }
+
+    @Override
+    public String toString() {
+      return Objects.toStringHelper(this)
+        .add("program", program)
+        .add("schedulableProgramType", schedulableProgramType)
+        .add("id", id).toString();
+    }
+
+    public static Schedule from(Program program, SchedulableProgramType schedulableProgramType, String id) {
+      return new Schedule(program, schedulableProgramType, id);
     }
   }
 

@@ -14,19 +14,16 @@
  * the License.
  */
 
-package co.cask.cdap.internal.app.runtime.adapter;
+package co.cask.cdap.common.exception;
 
 import co.cask.cdap.proto.Id;
 
 /**
- * Thrown when Adapter creation is requested, but an adapter already exists.
+ * Thrown when a schedule is not found.
  */
-public class AdapterAlreadyExistsException extends Exception {
-  public AdapterAlreadyExistsException(String adapterName) {
-    super(String.format("Adapter %s already exists.", adapterName));
-  }
+public class ScheduleNotFoundException extends NotFoundException {
 
-  public AdapterAlreadyExistsException(Id.Adapter adapter) {
-    this(adapter.toString());
+  public ScheduleNotFoundException(Id.Schedule schedule) {
+    super("schedule", schedule.toString());
   }
 }

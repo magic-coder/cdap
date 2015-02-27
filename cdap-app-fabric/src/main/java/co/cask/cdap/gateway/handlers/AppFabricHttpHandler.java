@@ -22,6 +22,8 @@ import co.cask.cdap.app.store.Store;
 import co.cask.cdap.app.store.StoreFactory;
 import co.cask.cdap.common.conf.CConfiguration;
 import co.cask.cdap.common.conf.Constants;
+import co.cask.cdap.common.exception.ApplicationNotFoundException;
+import co.cask.cdap.common.exception.NamespaceNotFoundException;
 import co.cask.cdap.common.http.RESTMigrationUtils;
 import co.cask.cdap.config.ConsoleSettingsStore;
 import co.cask.cdap.config.PreferencesStore;
@@ -37,7 +39,6 @@ import co.cask.cdap.internal.UserMessages;
 import co.cask.cdap.internal.app.runtime.ProgramOptionConstants;
 import co.cask.cdap.proto.Id;
 import co.cask.cdap.proto.Instances;
-import co.cask.cdap.proto.NamespaceMeta;
 import co.cask.cdap.proto.ProgramStatus;
 import co.cask.cdap.proto.ProgramType;
 import co.cask.http.BodyConsumer;
@@ -570,7 +571,9 @@ public class AppFabricHttpHandler extends AbstractAppFabricHttpHandler {
   @PUT
   @Path("/apps/{app-id}")
   public BodyConsumer deploy(HttpRequest request, HttpResponder responder, @PathParam("app-id") final String appId,
-                             @HeaderParam(ARCHIVE_NAME_HEADER) final String archiveName) {
+                             @HeaderParam(ARCHIVE_NAME_HEADER) final String archiveName)
+    throws IOException, NamespaceNotFoundException {
+
     return appLifecycleHttpHandler.deploy(RESTMigrationUtils.rewriteV2RequestToV3(request), responder,
                                           Constants.DEFAULT_NAMESPACE, appId, archiveName);
   }
@@ -581,7 +584,9 @@ public class AppFabricHttpHandler extends AbstractAppFabricHttpHandler {
   @POST
   @Path("/apps")
   public BodyConsumer deploy(HttpRequest request, HttpResponder responder,
-                             @HeaderParam(ARCHIVE_NAME_HEADER) final String archiveName) {
+                             @HeaderParam(ARCHIVE_NAME_HEADER) final String archiveName)
+    throws IOException, NamespaceNotFoundException {
+
     // null means use name provided by app spec
     return appLifecycleHttpHandler.deploy(RESTMigrationUtils.rewriteV2RequestToV3(request), responder,
                                           Constants.DEFAULT_NAMESPACE, null, archiveName);
@@ -740,7 +745,7 @@ public class AppFabricHttpHandler extends AbstractAppFabricHttpHandler {
   @DELETE
   @Path("/apps/{app-id}")
   public void deleteApp(HttpRequest request, HttpResponder responder,
-                        @PathParam("app-id") final String appId) {
+                        @PathParam("app-id") final String appId) throws Exception {
     appLifecycleHttpHandler.deleteApp(RESTMigrationUtils.rewriteV2RequestToV3(request), responder,
                                       Constants.DEFAULT_NAMESPACE, appId);
   }
@@ -750,9 +755,9 @@ public class AppFabricHttpHandler extends AbstractAppFabricHttpHandler {
    */
   @DELETE
   @Path("/apps")
-  public void deleteAllApps(HttpRequest request, HttpResponder responder) {
-    appLifecycleHttpHandler.deleteAllApps(RESTMigrationUtils.rewriteV2RequestToV3(request), responder,
-                                          Constants.DEFAULT_NAMESPACE);
+  public void deleteAllApps(HttpRequest request, HttpResponder responder) throws Exception {
+    appLifecycleHttpHandler.deleteApps(RESTMigrationUtils.rewriteV2RequestToV3(request),
+                                       responder, Constants.DEFAULT_NAMESPACE);
   }
 
   /**
@@ -861,9 +866,9 @@ public class AppFabricHttpHandler extends AbstractAppFabricHttpHandler {
    */
   @GET
   @Path("/apps")
-  public void getAllApps(HttpRequest request, HttpResponder responder) {
-    appLifecycleHttpHandler.getAllApps(RESTMigrationUtils.rewriteV2RequestToV3(request), responder,
-                                       Constants.DEFAULT_NAMESPACE);
+  public void listApps(HttpRequest request, HttpResponder responder) throws NamespaceNotFoundException {
+    appLifecycleHttpHandler.listApps(RESTMigrationUtils.rewriteV2RequestToV3(request),
+                                     responder, Constants.DEFAULT_NAMESPACE);
   }
 
   /**
@@ -871,8 +876,8 @@ public class AppFabricHttpHandler extends AbstractAppFabricHttpHandler {
    */
   @GET
   @Path("/apps/{app-id}")
-  public void getAppInfo(HttpRequest request, HttpResponder responder,
-                         @PathParam("app-id") String appId) {
+  public void getApp(HttpRequest request, HttpResponder responder,
+                         @PathParam("app-id") String appId) throws ApplicationNotFoundException {
     appLifecycleHttpHandler.getApp(RESTMigrationUtils.rewriteV2RequestToV3(request), responder,
                                    Constants.DEFAULT_NAMESPACE, appId);
   }

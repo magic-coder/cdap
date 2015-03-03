@@ -24,6 +24,8 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.collect.Iterables;
 
+import javax.annotation.Nullable;
+
 /**
  * Contains collection of classes representing different types of Ids.
  */
@@ -51,10 +53,19 @@ public abstract class Id {
   }
 
   public abstract String getId();
-
-  public String getType() {
+  protected abstract Id getParent();
+  public final String getIdType() {
     // TODO: refactor
-    return this.getClass().getSimpleName();
+    return this.getClass().getSimpleName().toLowerCase();
+  }
+
+  public final String getIdRep() {
+    Id parent = getParent();
+    if (parent == null) {
+      return getIdType() + ":" + getId();
+    } else {
+      return parent.getIdRep() + "/" + getIdType() + ":" + getId();
+    }
   }
 
   /**
@@ -62,12 +73,20 @@ public abstract class Id {
    */
   public static abstract class NamespacedId extends Id {
     public abstract Namespace getNamespace();
+
+    @Override
+    protected Id getParent() {
+      return getNamespace();
+    }
   }
 
   /**
    * Uniquely identifies a Namespace.
    */
   public static final class Namespace extends Id {
+    public static final Namespace DEFAULT = Id.Namespace.from("default");
+    public static final Namespace SYSTEM = Id.Namespace.from("system");
+
     private final String id;
 
     public Namespace(String id) {
@@ -76,6 +95,7 @@ public abstract class Id {
       this.id = id;
     }
 
+    @Override
     public String getId() {
       return id;
     }
@@ -105,6 +125,115 @@ public abstract class Id {
     public String toString() {
       return id;
     }
+
+    @Nullable
+    @Override
+    protected Id getParent() {
+      return null;
+    }
+  }
+
+
+    /**
+     * Uniquely identifies a Query Handle.
+     */
+    public static final class QueryHandle extends Id {
+      private final String id;
+
+      private QueryHandle(String id) {
+        Preconditions.checkNotNull(id, "id cannot be null.");
+        this.id = id;
+      }
+
+      public static QueryHandle from(String id) {
+        return new QueryHandle(id);
+      }
+
+      @Nullable
+      @Override
+      protected Id getParent() {
+        return null;
+      }
+
+      @Override
+      public String getId() {
+        return id;
+      }
+    }
+
+    /**
+     * Uniquely identifies a System Service.
+     */
+    public static final class SystemService extends Id {
+      private final String id;
+
+      private SystemService(String id) {
+        Preconditions.checkNotNull(id, "id cannot be null.");
+        this.id = id;
+      }
+
+      public static SystemService from(String id) {
+        return new SystemService(id);
+      }
+
+      @Nullable
+      @Override
+      protected Id getParent() {
+        return null;
+      }
+
+      @Override
+      public String getId() {
+        return id;
+      }
+    }
+
+  /**
+   * Uniquely identifies an Adapter Type.
+   */
+  public static final class AdapterType extends Id {
+    private final String adapterTypeId;
+
+    public AdapterType(final String adapterTypeId) {
+      Preconditions.checkNotNull(adapterTypeId, "adapterTypeId cannot be null.");
+      this.adapterTypeId = adapterTypeId;
+    }
+
+    @Override
+    public String getId() {
+      return adapterTypeId;
+    }
+
+    @Override
+    protected Id getParent() {
+      return null;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+
+      AdapterType that = (AdapterType) o;
+      return adapterTypeId.equals(that.adapterTypeId);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hashCode(adapterTypeId);
+    }
+
+    public static AdapterType from(String adapterTypeId) {
+      return new AdapterType(adapterTypeId);
+    }
+
+    public static AdapterType from(Application id) {
+      return new AdapterType(id.getId());
+    }
   }
 
   /**
@@ -130,6 +259,7 @@ public abstract class Id {
       return namespace.getId();
     }
 
+    @Override
     public String getId() {
       return applicationId;
     }
@@ -163,6 +293,10 @@ public abstract class Id {
     public static Application from(Adapter adapter, String adapterSpecType) {
       return new Application(adapter.getNamespace(), adapterSpecType);
     }
+
+    public static Application from(String namespaceId, AdapterType adapterType) {
+      return new Application(Namespace.from(namespaceId), adapterType.getId());
+    }
   }
 
   /**
@@ -188,6 +322,7 @@ public abstract class Id {
       return namespace.getId();
     }
 
+    @Override
     public String getId() {
       return adapterId;
     }
@@ -217,6 +352,7 @@ public abstract class Id {
     public static Adapter from(String namespaceId, String adapterId) {
       return new Adapter(Namespace.from(namespaceId), adapterId);
     }
+
   }
 
   /**
@@ -227,15 +363,22 @@ public abstract class Id {
     private final ProgramType type;
     private final String id;
 
-    public Program(Application application, final String id) {
+    public Program(Application application, ProgramType type, final String id) {
       Preconditions.checkNotNull(application, "application cannot be null.");
+      Preconditions.checkNotNull(application, "type cannot be null.");
       Preconditions.checkNotNull(id, "id cannot be null.");
       this.application = application;
+      this.type = type;
       this.id = id;
     }
 
+    @Override
     public String getId() {
       return id;
+    }
+
+    public ProgramType getType() {
+      return type;
     }
 
     public String getApplicationId() {
@@ -274,16 +417,16 @@ public abstract class Id {
       return result;
     }
 
-    public static Program from(Application appId, String pgmId) {
-      return new Program(appId, pgmId);
+    public static Program from(Application appId, ProgramType type, String pgmId) {
+      return new Program(appId, type, pgmId);
     }
 
-    public static Program from(String namespaceId, String appId, String pgmId) {
-      return new Program(new Application(new Namespace(namespaceId), appId), pgmId);
+    public static Program from(Id.Namespace namespaceId, String appId, ProgramType type, String pgmId) {
+      return new Program(new Application(namespaceId, appId), type, pgmId);
     }
 
-    public static Program from(Id.Namespace namespaceId, String appId, String pgmId) {
-      return new Program(new Application(namespaceId, appId), pgmId);
+    public static Program from(String namespaceId, String appId, ProgramType type, String pgmId) {
+      return new Program(new Application(new Namespace(namespaceId), appId), type, pgmId);
     }
 
     @Override
@@ -311,10 +454,191 @@ public abstract class Id {
       sb.append(")");
       return sb.toString();
     }
+
+    @Override
+    public Id getParent() {
+      return application;
+    }
   }
 
   /**
-   * Represents ID of a Schedule.
+   * Uniquely identifies a Worker.
+   */
+  public static class Worker extends Program {
+
+    private Worker(Application application, String id) {
+      super(application, ProgramType.WORKER, id);
+    }
+
+    public static Worker from(Application application, String id) {
+      return new Worker(application, id);
+    }
+  }
+
+  /**
+   * Uniquely identifies a Service.
+   */
+  public static class Service extends Program {
+
+    private Service(Application application, String id) {
+      super(application, ProgramType.SERVICE, id);
+    }
+
+    public static Service from(Application application, String id) {
+      return new Service(application, id);
+    }
+
+    /**
+     * Uniquely identifies a Service Runnable.
+     */
+    public static class Runnable extends NamespacedId {
+
+      private final Service service;
+      private final String id;
+
+      private Runnable(Service service, String id) {
+        Preconditions.checkArgument(service != null, "flow cannot be null");
+        Preconditions.checkArgument(id != null, "id cannot be null");
+        this.service = service;
+        this.id = id;
+      }
+
+      public static Runnable from(Service service, String id) {
+        return new Runnable(service, id);
+      }
+
+      @Override
+      public Namespace getNamespace() {
+        return service.getNamespace();
+      }
+
+      @Nullable
+      @Override
+      protected Id getParent() {
+        return service;
+      }
+
+      @Override
+      public String getId() {
+        return id;
+      }
+    }
+  }
+
+  /**
+   * Uniquely identifies a Flow.
+   */
+  public static class Flow extends Program {
+
+    private Flow(Application application, String id) {
+      super(application, ProgramType.FLOW, id);
+    }
+
+    public static Flow from(Application application, String flowId) {
+      return new Flow(application, flowId);
+    }
+
+    public static Flow from(String appId, String flowId) {
+      return new Flow(Id.Application.from(Namespace.DEFAULT, appId), flowId);
+    }
+
+    /**
+     * Uniquely identifies a Flowlet.
+     */
+    public static class Flowlet extends NamespacedId {
+
+      private final Flow flow;
+      private final String id;
+
+      private Flowlet(Flow flow, String id) {
+        Preconditions.checkArgument(flow != null, "flow cannot be null");
+        Preconditions.checkArgument(id != null, "id cannot be null");
+        this.flow = flow;
+        this.id = id;
+      }
+
+      public static Flowlet from(Flow flow, String id) {
+        return new Flowlet(flow, id);
+      }
+
+      public static Flowlet from(Application app, String flowId, String id) {
+        return new Flowlet(new Flow(app, flowId), id);
+      }
+
+      @Override
+      public Namespace getNamespace() {
+        return flow.getNamespace();
+      }
+
+      @Nullable
+      @Override
+      protected Id getParent() {
+        return flow;
+      }
+
+      @Override
+      public String getId() {
+        return id;
+      }
+    }
+  }
+
+  /**
+   * Uniquely identifies a Procedure.
+   */
+  public static class Procedure extends Program {
+
+    private Procedure(Application application, String id) {
+      super(application, ProgramType.PROCEDURE, id);
+    }
+
+    public static Procedure from(Application application, String id) {
+      return new Procedure(application, id);
+    }
+
+    public static Procedure from(String appId, String procedureId) {
+      return new Procedure(Id.Application.from(Namespace.DEFAULT, appId), procedureId);
+    }
+
+    /**
+     * Uniquely identifies a Procedure Handler.
+     */
+    public static class Method extends NamespacedId {
+
+      private final Procedure procedure;
+      private final String id;
+
+      private Method(Procedure procedure, String id) {
+        Preconditions.checkArgument(procedure != null, "procedure cannot be null");
+        Preconditions.checkArgument(id != null, "id cannot be null");
+        this.procedure = procedure;
+        this.id = id;
+      }
+
+      public static Method from(Procedure procedure, String id) {
+        return new Method(procedure, id);
+      }
+
+      @Override
+      public Namespace getNamespace() {
+        return procedure.getNamespace();
+      }
+
+      @Nullable
+      @Override
+      protected Id getParent() {
+        return procedure;
+      }
+
+      @Override
+      public String getId() {
+        return id;
+      }
+    }
+  }
+
+  /**
+   * Uniquely identifies a Schedule.
    */
   public static class Schedule extends NamespacedId {
 
@@ -339,6 +663,12 @@ public abstract class Id {
       return schedulableProgramType;
     }
 
+    @Override
+    public Id getParent() {
+      return program;
+    }
+
+    @Override
     public String getId() {
       return id;
     }
@@ -356,7 +686,10 @@ public abstract class Id {
         .add("id", id).toString();
     }
 
-    public static Schedule from(Program program, SchedulableProgramType schedulableProgramType, String id) {
+    public static Schedule from(Program program, String id) {
+      SchedulableProgramType schedulableProgramType = program.getType().getSchedulableType();
+      Preconditions.checkArgument(schedulableProgramType != null,
+                                  "Program type '" + program.getType() + "' is not schedulable");
       return new Schedule(program, schedulableProgramType, id);
     }
   }
@@ -390,7 +723,8 @@ public abstract class Id {
     private NotificationFeed(String namespace, String category, String name, String description) {
       Preconditions.checkArgument(namespace != null && !namespace.isEmpty(),
                                   "Namespace value cannot be null or empty.");
-      Preconditions.checkArgument(category != null && !category.isEmpty(), "Category value cannot be null or empty.");
+      Preconditions.checkArgument(category != null && !category.isEmpty(),
+                                  "Category value cannot be null or empty.");
       Preconditions.checkArgument(name != null && !name.isEmpty(), "Name value cannot be null or empty.");
       Preconditions.checkArgument(isId(namespace) && isId(category) && isId(name),
                                   "Namespace, category or name has a wrong format.");
@@ -405,7 +739,18 @@ public abstract class Id {
       return category;
     }
 
+    @Nullable
+    @Override
+    protected Id getParent() {
+      return namespace;
+    }
+
+    @Override
     public String getId() {
+      return name;
+    }
+
+    public String getFeedId() {
       return String.format("%s.%s.%s", namespace.getId(), category, name);
     }
 
@@ -534,12 +879,13 @@ public abstract class Id {
       return namespace;
     }
 
-    public String getNamespaceId() {
-      return namespace.getId();
+    @Override
+    public String getId() {
+      return streamName;
     }
 
-    public String getName() {
-      return streamName;
+    public String getNamespaceId() {
+      return namespace.getId();
     }
 
     public static Stream from(Namespace id, String streamName) {
@@ -669,6 +1015,17 @@ public abstract class Id {
     public static DatasetType from(String namespaceId, String typeId) {
       return new DatasetType(Namespace.from(namespaceId), typeId);
     }
+
+    @Nullable
+    @Override
+    protected Id getParent() {
+      return namespace;
+    }
+
+    @Override
+    public String getId() {
+      return typeName;
+    }
   }
 
   /**
@@ -694,6 +1051,12 @@ public abstract class Id {
 
     public String getNamespaceId() {
       return namespace.getId();
+    }
+
+    @Nullable
+    @Override
+    protected Id getParent() {
+      return namespace;
     }
 
     public String getId() {
@@ -758,6 +1121,12 @@ public abstract class Id {
 
     public String getNamespaceId() {
       return namespace.getId();
+    }
+
+    @Nullable
+    @Override
+    protected Id getParent() {
+      return namespace;
     }
 
     public String getId() {

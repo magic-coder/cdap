@@ -16,14 +16,20 @@
 
 package co.cask.cdap.common.exception;
 
-import co.cask.cdap.proto.Id;
-
 /**
- * Thrown when an element is not found
+ * Thrown when there was a conflict.
  */
-public class ObjectNotFoundException extends NotFoundException {
+public class ConflictException extends Exception {
 
-  public ObjectNotFoundException(Id id) {
-    super(id.getType(), id.getId());
+  public ConflictException() {
+    super();
+  }
+
+  public ConflictException(String message) {
+    super(message);
+  }
+
+  public ConflictException(String message, Throwable cause) {
+    super(message, cause);
   }
 }

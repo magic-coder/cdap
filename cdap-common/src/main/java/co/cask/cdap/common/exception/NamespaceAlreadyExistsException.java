@@ -21,27 +21,16 @@ import co.cask.cdap.proto.Id;
 /**
  * Thrown when a namespace already exists.
  */
-public class NamespaceAlreadyExistsException extends ObjectAlreadyExistsException {
+public class NamespaceAlreadyExistsException extends AlreadyExistsException {
 
-  private final Id.Namespace namespace;
-
-  @Deprecated
-  public NamespaceAlreadyExistsException(String namespaceId) {
-    super("namespace", namespaceId);
-    this.namespace = Id.Namespace.from(namespaceId);
-  }
+  private final Id.Namespace id;
 
   public NamespaceAlreadyExistsException(Id.Namespace id) {
     super(id);
-    this.namespace = id;
+    this.id = id;
   }
 
-  public Id.Namespace getNamespace() {
-    return namespace;
-  }
-
-  @Deprecated
-  public String getNamespaceId() {
-    return namespace.getId();
+  public Id.Namespace getId() {
+    return id;
   }
 }

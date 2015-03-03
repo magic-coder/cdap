@@ -1,5 +1,5 @@
 /*
- * Copyright © 2014 Cask Data, Inc.
+ * Copyright © 2015 Cask Data, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,20 +16,21 @@
 
 package co.cask.cdap.common.exception;
 
+import co.cask.cdap.proto.Id;
+
 /**
- * Thrown when an access token is unauthorized or the authentication header is not exist.
+ * Thrown when a namespace cannot be deleted.
  */
-public class UnAuthorizedAccessTokenException extends Exception {
+public class NamespaceCannotBeDeletedException extends CannotBeDeletedException {
 
-  public UnAuthorizedAccessTokenException() {
-    super();
+  private final Id.Namespace namespace;
+
+  public NamespaceCannotBeDeletedException(Id.Namespace id) {
+    super(id);
+    this.namespace = id;
   }
 
-  public UnAuthorizedAccessTokenException(String msg) {
-    super(msg);
-  }
-
-  public UnAuthorizedAccessTokenException(String msg, Throwable throwable) {
-    super(msg, throwable);
+  public Id.Namespace getNamespace() {
+    return namespace;
   }
 }

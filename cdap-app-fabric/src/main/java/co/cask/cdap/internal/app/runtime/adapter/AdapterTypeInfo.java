@@ -16,6 +16,7 @@
 
 package co.cask.cdap.internal.app.runtime.adapter;
 
+import co.cask.cdap.proto.Id;
 import co.cask.cdap.proto.ProgramType;
 import co.cask.cdap.proto.Sink;
 import co.cask.cdap.proto.Source;
@@ -30,7 +31,7 @@ import java.util.Map;
 public final class AdapterTypeInfo {
 
   private final File file;
-  private final String type;
+  private final Id.AdapterType type;
   private final Source.Type sourceType;
   private final Sink.Type sinkType;
   private final Map<String, String> defaultSourceProperties;
@@ -38,7 +39,7 @@ public final class AdapterTypeInfo {
   private final Map<String, String> defaultAdapterProperties;
   private final ProgramType programType;
 
-  public AdapterTypeInfo(File file, String adapterType, Source.Type sourceType, Sink.Type sinkType,
+  public AdapterTypeInfo(File file, Id.AdapterType adapterType, Source.Type sourceType, Sink.Type sinkType,
                          Map<String, String> defaultSourceProperties,
                          Map<String, String> defaultSinkProperties,
                          Map<String, String> defaultAdapterProperties,
@@ -57,7 +58,7 @@ public final class AdapterTypeInfo {
     return file;
   }
 
-  public String getType() {
+  public Id.AdapterType getType() {
     return type;
   }
 

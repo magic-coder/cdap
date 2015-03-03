@@ -19,25 +19,21 @@ package co.cask.cdap.common.exception;
 import co.cask.cdap.proto.Id;
 
 /**
- * Thrown when an application is not found in CDAP.
+ * Thrown when an application is not found.
  */
 public class ApplicationNotFoundException extends NotFoundException {
 
-  private final String appId;
-
-  public ApplicationNotFoundException(String appId) {
-    super("application", appId);
-    this.appId = appId;
-  }
+  private final Id.Application id;
 
   public ApplicationNotFoundException(Id.Application id) {
-    this(id.getId());
+    super(id);
+    this.id = id;
   }
 
   /**
    * @return ID of the application
    */
-  public String getAppId() {
-    return appId;
+  public Id.Application getId() {
+    return id;
   }
 }

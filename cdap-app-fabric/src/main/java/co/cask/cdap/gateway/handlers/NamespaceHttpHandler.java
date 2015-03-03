@@ -17,22 +17,22 @@
 package co.cask.cdap.gateway.handlers;
 
 import co.cask.cdap.common.conf.Constants;
-import co.cask.cdap.common.exception.AlreadyExistsException;
-import co.cask.cdap.common.exception.NotFoundException;
+import co.cask.cdap.common.exception.BadRequestException;
+import co.cask.cdap.common.exception.NamespaceAlreadyExistsException;
+import co.cask.cdap.common.exception.NamespaceCannotBeCreatedException;
+import co.cask.cdap.common.exception.NamespaceNotFoundException;
 import co.cask.cdap.gateway.auth.Authenticator;
 import co.cask.cdap.gateway.handlers.util.AbstractAppFabricHttpHandler;
 import co.cask.cdap.internal.app.namespace.NamespaceAdmin;
+import co.cask.cdap.internal.app.namespace.NamespaceCannotBeDeletedException;
 import co.cask.cdap.proto.Id;
 import co.cask.cdap.proto.NamespaceMeta;
 import co.cask.http.HttpHandler;
 import co.cask.http.HttpResponder;
 import com.google.common.base.CharMatcher;
-import com.google.gson.JsonSyntaxException;
 import com.google.inject.Inject;
 import org.jboss.netty.handler.codec.http.HttpRequest;
 import org.jboss.netty.handler.codec.http.HttpResponseStatus;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import javax.ws.rs.DELETE;
@@ -46,7 +46,6 @@ import javax.ws.rs.PathParam;
  */
 @Path(Constants.Gateway.API_VERSION_3)
 public class NamespaceHttpHandler extends AbstractAppFabricHttpHandler {
-  private static final Logger LOG = LoggerFactory.getLogger(NamespaceHttpHandler.class);
 
   private final NamespaceAdmin namespaceAdmin;
 
@@ -59,119 +58,71 @@ public class NamespaceHttpHandler extends AbstractAppFabricHttpHandler {
   @GET
   @Path("/namespaces")
   public void getAllNamespaces(HttpRequest request, HttpResponder responder) {
-    try {
-      responder.sendJson(HttpResponseStatus.OK, namespaceAdmin.listNamespaces());
-    } catch (Exception e) {
-      LOG.error("Internal error while listing all namespaces", e);
-      responder.sendString(HttpResponseStatus.INTERNAL_SERVER_ERROR, e.getMessage());
-    }
+    responder.sendJson(HttpResponseStatus.OK, namespaceAdmin.listNamespaces());
   }
 
   @GET
   @Path("/namespaces/{namespace-id}")
   public void getNamespace(HttpRequest request, HttpResponder responder,
-                           @PathParam("namespace-id") String namespaceId) {
-    try {
-      NamespaceMeta ns = namespaceAdmin.getNamespace(Id.Namespace.from(namespaceId));
-      responder.sendJson(HttpResponseStatus.OK, ns);
-    } catch (NotFoundException e) {
-      responder.sendString(HttpResponseStatus.NOT_FOUND, String.format("Namespace %s not found", namespaceId));
-    } catch (Exception e) {
-      LOG.error("Internal error while getting namespace '{}'", namespaceId, e);
-      responder.sendString(HttpResponseStatus.INTERNAL_SERVER_ERROR, e.getMessage());
-    }
+                           @PathParam("namespace-id") String namespaceId) throws NamespaceNotFoundException {
+    NamespaceMeta ns = namespaceAdmin.getNamespace(Id.Namespace.from(namespaceId));
+    responder.sendJson(HttpResponseStatus.OK, ns);
   }
 
   @PUT
   @Path("/namespaces/{namespace-id}")
-  public void create(HttpRequest request, HttpResponder responder, @PathParam("namespace-id") String namespaceId) {
-    NamespaceMeta metadata;
-    try {
-      metadata = parseBody(request, NamespaceMeta.class);
-    } catch (JsonSyntaxException e) {
-      responder.sendString(HttpResponseStatus.BAD_REQUEST, "Invalid json object provided in request body.");
-      return;
-    } catch (IOException e) {
-      LOG.error("Failed to read namespace metadata request body.", e);
-      responder.sendString(HttpResponseStatus.INTERNAL_SERVER_ERROR, e.getMessage());
-      return;
+  public void create(HttpRequest request, HttpResponder responder,
+                     @PathParam("namespace-id") String namespaceId)
+    throws BadRequestException, IOException, NamespaceCannotBeCreatedException, NamespaceAlreadyExistsException {
+
+    NamespaceMeta metadata = parseBody(request, NamespaceMeta.class);
+
+    checkValid(namespaceId);
+    checkNotReserved(namespaceId);
+
+    NamespaceMeta.Builder namespaceMeta = new NamespaceMeta.Builder().setId(namespaceId);
+    if (metadata != null && metadata.getName() != null) {
+      namespaceMeta.setName(metadata.getName());
+    }
+    if (metadata != null && metadata.getDescription() != null) {
+      namespaceMeta.setDescription(metadata.getDescription());
     }
 
-    if (!isValid(namespaceId)) {
-      responder.sendString(HttpResponseStatus.BAD_REQUEST,
-                           "Namespace id can contain only alphanumeric characters, '-' or '_'.");
-      return;
-    }
-
-    if (isReserved(namespaceId)) {
-      responder.sendString(HttpResponseStatus.BAD_REQUEST,
-                           String.format("Cannot delete the namespace '%s'. '%s' is a reserved namespace.",
-                                         namespaceId, namespaceId));
-      return;
-    }
-
-    // Handle optional params
-    String name = null;
-    String description = null;
-    if (metadata != null) {
-      if (metadata.getName() != null) {
-        name = metadata.getName();
-      }
-      if (metadata.getDescription() != null) {
-        description = metadata.getDescription();
-      }
-    }
-
-    NamespaceMeta.Builder builder = new NamespaceMeta.Builder();
-    builder.setId(namespaceId)
-      .setName(name)
-      .setDescription(description)
-      .build();
-
-    try {
-      namespaceAdmin.createNamespace(builder.build());
-      responder.sendString(HttpResponseStatus.OK,
-                           String.format("Namespace '%s' created successfully.", namespaceId));
-    } catch (AlreadyExistsException e) {
-      responder.sendString(HttpResponseStatus.OK, String.format("Namespace '%s' already exists.", namespaceId));
-    } catch (Exception e) {
-      LOG.error("Internal error while creating namespace.", e);
-      responder.sendString(HttpResponseStatus.INTERNAL_SERVER_ERROR, e.getMessage());
-    }
+    namespaceAdmin.createNamespace(namespaceMeta.build());
+    responder.sendString(HttpResponseStatus.OK, String.format("Namespace '%s' created successfully.", namespaceId));
   }
 
   @DELETE
   @Path("/namespaces/{namespace-id}")
-  public void delete(HttpRequest request, HttpResponder responder, @PathParam("namespace-id") String namespace) {
-    if (isReserved(namespace)) {
-      responder.sendString(HttpResponseStatus.FORBIDDEN,
-                           String.format("Cannot delete the namespace '%s'. '%s' is a reserved namespace.",
-                                         namespace, namespace));
-      return;
-    }
+  public void delete(HttpRequest request, HttpResponder responder,
+                     @PathParam("namespace-id") String namespace)
+    throws BadRequestException, NamespaceNotFoundException, NamespaceCannotBeDeletedException {
+
+    checkNotReserved(namespace);
     Id.Namespace namespaceId = Id.Namespace.from(namespace);
-    try {
-      namespaceAdmin.deleteNamespace(namespaceId);
-      responder.sendStatus(HttpResponseStatus.OK);
-    } catch (NotFoundException e) {
-      responder.sendString(HttpResponseStatus.NOT_FOUND, String.format("Namespace %s not found.", namespace));
-    } catch (Exception e) {
-      LOG.error("Internal error while deleting namespace.", e);
-      responder.sendString(HttpResponseStatus.INTERNAL_SERVER_ERROR, e.getMessage());
-    }
+    namespaceAdmin.deleteNamespace(namespaceId);
+    responder.sendStatus(HttpResponseStatus.OK);
   }
 
-  private boolean isValid(String namespaceId) {
+  private void checkValid(String namespaceId) throws BadRequestException {
     // TODO: This is copied from StreamVerification in app-fabric as this handler is in data-fabric module.
-    return CharMatcher.inRange('A', 'Z')
+    boolean valid = CharMatcher.inRange('A', 'Z')
       .or(CharMatcher.inRange('a', 'z'))
       .or(CharMatcher.is('-'))
       .or(CharMatcher.is('_'))
       .or(CharMatcher.inRange('0', '9')).matchesAllOf(namespaceId);
+    if (!valid) {
+      throw new BadRequestException("Namespace id can contain only alphanumeric characters, '-' or '_'.");
+    }
   }
 
-  private boolean isReserved(String namespaceId) {
-    return Constants.DEFAULT_NAMESPACE.equals(namespaceId) || Constants.SYSTEM_NAMESPACE.equals(namespaceId) ||
+  private void checkNotReserved(String namespaceId) throws BadRequestException {
+    boolean reserved = Constants.DEFAULT_NAMESPACE.equals(namespaceId) ||
+      Constants.SYSTEM_NAMESPACE.equals(namespaceId) ||
       Constants.Logging.SYSTEM_NAME.equals(namespaceId);
+    if (reserved) {
+      throw new BadRequestException(String.format("Cannot delete the namespace '%s'. '%s' is a reserved namespace.",
+                                                  namespaceId, namespaceId));
+    }
   }
 }

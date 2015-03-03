@@ -21,9 +21,16 @@ import co.cask.cdap.proto.Id;
 /**
  * Thrown when a schedule is not found.
  */
-public class ScheduleNotFoundException extends ObjectNotFoundException {
+public class ScheduleNotFoundException extends NotFoundException {
 
-  public ScheduleNotFoundException(Id.Schedule schedule) {
-    super(schedule);
+  private final Id.Schedule id;
+
+  public ScheduleNotFoundException(Id.Schedule id) {
+    super(id);
+    this.id = id;
+  }
+
+  public Id.Schedule getId() {
+    return id;
   }
 }

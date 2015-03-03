@@ -71,8 +71,4 @@ public abstract class NamespacedMetadataStoreView
   public void deleteAll(Id.Namespace namespace) {
     metadataStore.deleteAll(getListKey(namespace));
   }
-
-  public boolean exists(Id.Namespace namespace) {
-
-  }
 }

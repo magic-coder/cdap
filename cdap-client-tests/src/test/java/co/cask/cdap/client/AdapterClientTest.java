@@ -38,8 +38,6 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -75,7 +73,7 @@ public class AdapterClientTest extends ClientTestBase {
   @Before
   public void setUp() throws Throwable {
     super.setUp();
-    clientConfig.setNamespace(Constants.DEFAULT_NAMESPACE);
+    clientConfig.setNamespace(Constants.DEFAULT_NAMESPACE_ID);
     adapterClient = new AdapterClient(clientConfig);
     applicationClient = new ApplicationClient(clientConfig);
   }

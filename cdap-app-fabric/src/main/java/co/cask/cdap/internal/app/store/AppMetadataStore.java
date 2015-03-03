@@ -67,7 +67,6 @@ public class AppMetadataStore extends MetadataStoreDataset {
 
   public AppMetadataStore(Table table) {
     super(table);
-    this.appView
   }
 
   @Override
@@ -279,30 +278,31 @@ public class AppMetadataStore extends MetadataStoreDataset {
 
 
   @Nullable
-  public AdapterSpecification getAdapter(Id.Namespace id, String name) {
-    AdapterMeta adapterMeta = getAdapterMeta(id, name);
+  public AdapterSpecification getAdapter(Id.Adapter adapter) {
+    AdapterMeta adapterMeta = getAdapterMeta(adapter);
     return adapterMeta == null ?  null : adapterMeta.getSpec();
   }
 
   @Nullable
-  public AdapterStatus getAdapterStatus(Id.Namespace id, String name) {
-    AdapterMeta adapterMeta = getAdapterMeta(id, name);
+  public AdapterStatus getAdapterStatus(Id.Adapter adapter) {
+    AdapterMeta adapterMeta = getAdapterMeta(adapter);
     return adapterMeta == null ?  null : adapterMeta.getStatus();
   }
 
   @Nullable
-  public AdapterStatus setAdapterStatus(Id.Namespace id, String name, AdapterStatus status) {
-    AdapterMeta adapterMeta = getAdapterMeta(id, name);
+  public AdapterStatus setAdapterStatus(Id.Adapter adapter, AdapterStatus status) {
+    AdapterMeta adapterMeta = getAdapterMeta(adapter);
     if (adapterMeta == null) {
       return null;
     }
     AdapterStatus previousStatus = adapterMeta.getStatus();
-    writeAdapter(id, adapterMeta.getSpec(), status);
+    writeAdapter(adapter.getNamespace(), adapterMeta.getSpec(), status);
     return previousStatus;
   }
 
-  private AdapterMeta getAdapterMeta(Id.Namespace id, String name) {
-    return get(new MDSKey.Builder().add(TYPE_ADAPTER, id.getId(), name).build(), AdapterMeta.class);
+  private AdapterMeta getAdapterMeta(Id.Adapter adapter) {
+    return get(new MDSKey.Builder().add(TYPE_ADAPTER, adapter.getNamespaceId(), adapter.getId()).build(),
+               AdapterMeta.class);
   }
 
   public List<AdapterSpecification> getAllAdapters(Id.Namespace id) {
@@ -315,11 +315,11 @@ public class AppMetadataStore extends MetadataStoreDataset {
     return adapterSpecs;
   }
 
-  public void deleteAdapter(Id.Namespace id, String name) {
-    deleteAll(new MDSKey.Builder().add(TYPE_ADAPTER, id.getId(), name).build());
+  public void deleteAdapter(Id.Adapter adapter) {
+    deleteAll(new MDSKey.Builder().add(TYPE_ADAPTER, adapter.getNamespaceId(), adapter.getId()).build());
   }
 
-  public void deleteAllAdapters(Id.Namespace id) {
+  public void deleteAdapters(Id.Namespace id) {
     deleteAll(new MDSKey.Builder().add(TYPE_ADAPTER, id.getId()).build());
   }
 

@@ -21,7 +21,7 @@ import co.cask.cdap.proto.Id;
 /**
  * Thrown when a dataset was not found.
  */
-public class DatasetNotFoundException extends ObjectNotFoundException {
+public class DatasetNotFoundException extends NotFoundException {
 
   private final Id.DatasetInstance dataset;
 

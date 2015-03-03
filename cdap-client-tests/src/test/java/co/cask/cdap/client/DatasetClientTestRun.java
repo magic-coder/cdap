@@ -25,6 +25,7 @@ import co.cask.cdap.common.exception.DatasetModuleNotFoundException;
 import co.cask.cdap.common.exception.DatasetTypeNotFoundException;
 import co.cask.cdap.proto.DatasetModuleMeta;
 import co.cask.cdap.proto.DatasetTypeMeta;
+import co.cask.cdap.proto.Id;
 import co.cask.cdap.proto.NamespaceMeta;
 import co.cask.cdap.test.XSlowTests;
 import org.junit.After;
@@ -67,7 +68,7 @@ public class DatasetClientTestRun extends ClientTestBase {
       namespaceClient.create(new NamespaceMeta.Builder().setId(OTHER_NAMESPACE).build());
     } catch (AlreadyExistsException e) {
     }
-    clientConfig.setNamespace(TEST_NAMESPACE);
+    clientConfig.setNamespace(Id.Namespace.from(TEST_NAMESPACE));
   }
 
   @After
@@ -95,13 +96,13 @@ public class DatasetClientTestRun extends ClientTestBase {
     Assert.assertEquals(StandaloneDatasetModule.NAME, datasetModuleMeta.getName());
 
     LOG.info("Checking that the new Dataset module does not exist in a different namespace");
-    clientConfig.setNamespace(OTHER_NAMESPACE);
+    clientConfig.setNamespace(Id.Namespace.from(OTHER_NAMESPACE));
     try {
       moduleClient.get(StandaloneDatasetModule.NAME);
       Assert.fail("datasetModule found in namespace other than one in which it was expected");
     } catch (DatasetModuleNotFoundException expected) {
     }
-    clientConfig.setNamespace(TEST_NAMESPACE);
+    clientConfig.setNamespace(Id.Namespace.from(TEST_NAMESPACE));
 
     LOG.info("Checking that the new Dataset type exists");
     typeClient.waitForExists(StandaloneDataset.TYPE_NAME, 5, TimeUnit.SECONDS);
@@ -114,13 +115,13 @@ public class DatasetClientTestRun extends ClientTestBase {
     Assert.assertEquals(StandaloneDataset.class.getName(), datasetTypeMeta.getName());
 
     LOG.info("Checking that the new Dataset module does not exist in a different namespace");
-    clientConfig.setNamespace(OTHER_NAMESPACE);
+    clientConfig.setNamespace(Id.Namespace.from(OTHER_NAMESPACE));
     try {
       typeClient.get(StandaloneDataset.class.getName());
       Assert.fail("datasetType found in namespace other than one in which it was expected");
     } catch (DatasetTypeNotFoundException expected) {
     }
-    clientConfig.setNamespace(TEST_NAMESPACE);
+    clientConfig.setNamespace(Id.Namespace.from(TEST_NAMESPACE));
 
     LOG.info("Creating, truncating, and deleting dataset of new Dataset type");
     // Before creating dataset, there are some system datasets already exist

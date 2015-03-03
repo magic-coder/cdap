@@ -21,28 +21,16 @@ import co.cask.cdap.proto.Id;
 /**
  * Thrown when a namespace is not found in CDAP.
  */
-public class NamespaceNotFoundException extends ObjectNotFoundException {
+public class NamespaceNotFoundException extends NotFoundException {
 
-  private final Id.Namespace namespace;
-
-  @Deprecated
-  public NamespaceNotFoundException(String namespaceId) {
-    super("namespace", namespaceId);
-    this.namespace = Id.Namespace.from(namespaceId);
-  }
+  private final Id.Namespace id;
 
   public NamespaceNotFoundException(Id.Namespace id) {
     super(id);
-    this.namespace = id;
-
+    this.id = id;
   }
 
-  public Id.Namespace getNamespace() {
-    return namespace;
-  }
-
-  @Deprecated
-  public String getNamespaceId() {
-    return namespace.getId();
+  public Id.Namespace getId() {
+    return id;
   }
 }

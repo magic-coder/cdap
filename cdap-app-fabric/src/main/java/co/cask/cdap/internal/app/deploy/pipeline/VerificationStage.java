@@ -87,7 +87,7 @@ public class VerificationStage extends AbstractStage<ApplicationDeployable> {
     Id.Application appId = input.getId();
 
     if (ApplicationDeployScope.USER.equals(input.getApplicationDeployScope())) {
-      AdapterTypeInfo adapterTypeInfo = adapterService.getAdapterTypeInfo(appId.getId());
+      AdapterTypeInfo adapterTypeInfo = adapterService.getAdapterTypeInfo(Id.AdapterType.from(appId));
       if (adapterTypeInfo != null) {
         throw new RuntimeException
           (String.format("Cannot deploy Application %s. An AdapterType exists with a conflicting name.", appId));

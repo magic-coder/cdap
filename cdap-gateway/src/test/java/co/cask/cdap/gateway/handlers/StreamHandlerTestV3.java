@@ -45,6 +45,17 @@ public class StreamHandlerTestV3 extends StreamHandlerTest {
     return createURL(Constants.DEFAULT_NAMESPACE, path);
   }
 
+  @Override
+  protected URL createStreamInfoURL(String streamName) throws URISyntaxException, MalformedURLException {
+    return createURL(String.format("streams/%s", streamName));
+  }
+
+  @Override
+  protected URL createPropertiesURL(String streamName) throws URISyntaxException, MalformedURLException {
+    return createURL(String.format("streams/%s/properties", streamName));
+  }
+
+
   private URL createURL(String namespace, String path) throws URISyntaxException, MalformedURLException {
     return getEndPoint(String.format("/v3/namespaces/%s/%s", namespace, path)).toURL();
   }
@@ -52,7 +63,7 @@ public class StreamHandlerTestV3 extends StreamHandlerTest {
   @Test
   public void testNamespacedStreamEvents() throws Exception {
     // Create two streams with the same name, in different namespaces.
-    String streamName = "testNamespacedMetrics";
+    String streamName = "testNamespacedEvents";
     Id.Stream streamId1 = Id.Stream.from("namespace1", streamName);
     Id.Stream streamId2 = Id.Stream.from("namespace2", streamName);
 
@@ -111,21 +122,21 @@ public class StreamHandlerTestV3 extends StreamHandlerTest {
 
 
   private void createStream(Id.Stream streamId) throws Exception {
-    URL url = createURL(streamId.getNamespaceId(), "streams/" + streamId.getName());
+    URL url = createURL(streamId.getNamespaceId(), "streams/" + streamId.getId());
     HttpRequest request = HttpRequest.put(url).build();
     HttpResponse response = HttpRequests.execute(request);
     Assert.assertEquals(200, response.getResponseCode());
   }
 
   private void sendEvent(Id.Stream streamId, String body) throws Exception {
-    URL url = createURL(streamId.getNamespaceId(), "streams/" + streamId.getName());
+    URL url = createURL(streamId.getNamespaceId(), "streams/" + streamId.getId());
     HttpRequest request = HttpRequest.post(url).withBody(body).build();
     HttpResponse response = HttpRequests.execute(request);
     Assert.assertEquals(200, response.getResponseCode());
   }
 
   private List<String> fetchEvents(Id.Stream streamId) throws Exception {
-    URL url = createURL(streamId.getNamespaceId(), "streams/" + streamId.getName() + "/events");
+    URL url = createURL(streamId.getNamespaceId(), "streams/" + streamId.getId() + "/events");
     HttpRequest request = HttpRequest.get(url).build();
     HttpResponse response = HttpRequests.execute(request);
     Assert.assertEquals(200, response.getResponseCode());
@@ -138,7 +149,7 @@ public class StreamHandlerTestV3 extends StreamHandlerTest {
     }
     return events;
   }
-  
+
   private void checkEventsProcessed(Id.Stream streamId, long expectedCount, int retries) throws Exception {
     for (int i = 0; i < retries; i++) {
       long numProcessed = getNumProcessed(streamId);
@@ -154,7 +165,7 @@ public class StreamHandlerTestV3 extends StreamHandlerTest {
   private long getNumProcessed(Id.Stream streamId) throws Exception {
     String path =
       String.format("/v3/metrics/query?metric=system.collect.events&context=namespace.%s.stream.%s&aggregate=true",
-                    streamId.getNamespaceId(), streamId.getName());
+                    streamId.getNamespaceId(), streamId.getId());
     HttpRequest request = HttpRequest.post(getEndPoint(path).toURL()).build();
     HttpResponse response = HttpRequests.execute(request);
     Assert.assertEquals(200, response.getResponseCode());

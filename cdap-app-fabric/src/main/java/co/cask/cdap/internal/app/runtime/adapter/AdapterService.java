@@ -31,6 +31,7 @@ import co.cask.cdap.app.store.StoreFactory;
 import co.cask.cdap.common.conf.CConfiguration;
 import co.cask.cdap.common.conf.Constants;
 import co.cask.cdap.common.exception.AdapterNotFoundException;
+import co.cask.cdap.common.exception.AdapterTypeNotFoundException;
 import co.cask.cdap.common.exception.ApplicationNotFoundException;
 import co.cask.cdap.common.exception.NamespaceNotFoundException;
 import co.cask.cdap.common.exception.NotFoundException;
@@ -82,7 +83,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.jar.Attributes;
 import java.util.jar.JarFile;
 import java.util.jar.Manifest;
-import javax.annotation.Nullable;
 
 /**
  * Service that manages lifecycle of Adapters.
@@ -100,7 +100,7 @@ public class AdapterService extends AbstractIdleService {
   private final Scheduler scheduler;
   private final Store store;
   private final PreferencesStore preferencesStore;
-  private Map<String, AdapterTypeInfo> adapterTypeInfos;
+  private Map<Id.AdapterType, AdapterTypeInfo> adapterTypeInfos;
 
   @Inject
   public AdapterService(CConfiguration configuration, DatasetFramework datasetFramework, Scheduler scheduler,
@@ -136,9 +136,11 @@ public class AdapterService extends AbstractIdleService {
    * @param adapterType adapter type
    * @return instance of {@link AdapterTypeInfo} if available, null otherwise
    */
-  @Nullable
-  public AdapterTypeInfo getAdapterTypeInfo(String adapterType) {
-    return this.adapterTypeInfos.get(adapterType);
+  public AdapterTypeInfo getAdapterTypeInfo(Id.AdapterType adapterType) throws AdapterTypeNotFoundException {
+    if (!adapterTypeInfos.containsKey(adapterType)) {
+      throw new AdapterTypeNotFoundException(adapterType);
+    }
+    return adapterTypeInfos.get(adapterType);
   }
 
   /**
@@ -149,11 +151,7 @@ public class AdapterService extends AbstractIdleService {
    * @throws AdapterNotFoundException if the requested adapter is not found
    */
   public AdapterSpecification getAdapter(Id.Adapter adapter) throws AdapterNotFoundException {
-    AdapterSpecification adapterSpec = store.getAdapter(adapter);
-    if (adapterSpec == null) {
-      throw new AdapterNotFoundException(adapter);
-    }
-    return adapterSpec;
+    return store.getAdapter(adapter);
   }
 
   /**
@@ -164,11 +162,7 @@ public class AdapterService extends AbstractIdleService {
    * @throws AdapterNotFoundException if the requested adapter is not found
    */
   public AdapterStatus getAdapterStatus(Id.Adapter adapter) throws AdapterNotFoundException {
-    AdapterStatus adapterStatus = store.getAdapterStatus(adapter);
-    if (adapterStatus == null) {
-      throw new AdapterNotFoundException(adapter);
-    }
-    return adapterStatus;
+    return store.getAdapterStatus(adapter);
   }
 
   /**
@@ -178,13 +172,8 @@ public class AdapterService extends AbstractIdleService {
    * @return specified Adapter's previous status
    * @throws AdapterNotFoundException if the specified adapter is not found
    */
-  public AdapterStatus setAdapterStatus(Id.Adapter adapter, AdapterStatus status)
-    throws AdapterNotFoundException {
-    AdapterStatus existingStatus = store.setAdapterStatus(adapter, status);
-    if (existingStatus == null) {
-      throw new AdapterNotFoundException(adapter);
-    }
-    return existingStatus;
+  public AdapterStatus setAdapterStatus(Id.Adapter adapter, AdapterStatus status) throws AdapterNotFoundException {
+    return store.setAdapterStatus(adapter, status);
   }
 
   /**
@@ -293,14 +282,14 @@ public class AdapterService extends AbstractIdleService {
                                   String.format("Unsupported program type %s for adapter", programType.toString()));
       Map<String, WorkflowSpecification> workflowSpecs = appSpec.getWorkflows();
       for (Map.Entry<String, WorkflowSpecification> entry : workflowSpecs.entrySet()) {
-        Id.Program programId = Id.Program.from(adapterApp, entry.getValue().getName());
+        Id.Program programId = Id.Program.from(adapter.getNamespace(), appSpec.getName(),
+                                               programType, entry.getValue().getName());
         scheduler.suspendSchedule(programId, SchedulableProgramType.WORKFLOW,
                                   constructScheduleName(programId, adapter.getId()));
       }
-
       setAdapterStatus(adapter, AdapterStatus.STOPPED);
     } catch (ApplicationNotFoundException e) {
-      throw new AdapterNotFoundException(adapter);
+        throw new AdapterNotFoundException(adapter);
     }
   }
 
@@ -322,11 +311,11 @@ public class AdapterService extends AbstractIdleService {
                                   String.format("Unsupported program type %s for adapter", programType.toString()));
       Map<String, WorkflowSpecification> workflowSpecs = appSpec.getWorkflows();
       for (Map.Entry<String, WorkflowSpecification> entry : workflowSpecs.entrySet()) {
-        Id.Program programId = Id.Program.from(adapterApp, entry.getValue().getName());
+        Id.Program programId = Id.Program.from(adapter.getNamespace(), appSpec.getName(),
+                                               programType, entry.getValue().getName());
         scheduler.resumeSchedule(programId, SchedulableProgramType.WORKFLOW,
                                  constructScheduleName(programId, adapter.getId()));
       }
-
       setAdapterStatus(adapter, AdapterStatus.STARTED);
     } catch (ApplicationNotFoundException e) {
       throw new AdapterNotFoundException(adapter);
@@ -363,7 +352,7 @@ public class AdapterService extends AbstractIdleService {
       DeploymentInfo deploymentInfo = new DeploymentInfo(adapterTypeInfo.getFile(), destination,
                                                          ApplicationDeployScope.SYSTEM);
       ApplicationWithPrograms applicationWithPrograms =
-        manager.deploy(Id.Namespace.from(namespaceId), adapterTypeInfo.getType(), deploymentInfo).get();
+        manager.deploy(Id.Namespace.from(namespaceId), adapterTypeInfo.getType().getId(), deploymentInfo).get();
       return applicationWithPrograms.getSpecification();
     } catch (Exception e) {
       throw new RuntimeException(e);
@@ -379,7 +368,7 @@ public class AdapterService extends AbstractIdleService {
                                 String.format("Unsupported program type %s for adapter", programType.toString()));
     Map<String, WorkflowSpecification> workflowSpecs = spec.getWorkflows();
     for (Map.Entry<String, WorkflowSpecification> entry : workflowSpecs.entrySet()) {
-      Id.Program programId = Id.Program.from(namespaceId, spec.getName(), entry.getValue().getName());
+      Id.Program programId = Id.Program.from(namespaceId, spec.getName(), programType, entry.getValue().getName());
       addSchedule(programId, SchedulableProgramType.WORKFLOW, adapterSpec);
     }
   }
@@ -393,7 +382,8 @@ public class AdapterService extends AbstractIdleService {
                                 String.format("Unsupported program type %s for adapter", programType.toString()));
     Map<String, WorkflowSpecification> workflowSpecs = spec.getWorkflows();
     for (Map.Entry<String, WorkflowSpecification> entry : workflowSpecs.entrySet()) {
-      Id.Program programId = Id.Program.from(namespaceId, adapterSpec.getType(), entry.getValue().getName());
+      Id.Program programId = Id.Program.from(namespaceId, adapterSpec.getType(),
+                                             programType, entry.getValue().getName());
       deleteSchedule(programId, SchedulableProgramType.WORKFLOW,
                      constructScheduleName(programId, adapterSpec.getName()));
     }
@@ -424,7 +414,7 @@ public class AdapterService extends AbstractIdleService {
   private void deleteSchedule(Id.Program programId, SchedulableProgramType programType, String scheduleName)
     throws NotFoundException, SchedulerException {
 
-    Id.Schedule schedule = Id.Schedule.from(programId, programType, scheduleName);
+    Id.Schedule schedule = Id.Schedule.from(programId, scheduleName);
     scheduler.deleteSchedule(programId, programType, scheduleName);
     //TODO: Scheduler API should also manage the MDS.
     store.deleteSchedule(schedule);
@@ -518,7 +508,7 @@ public class AdapterService extends AbstractIdleService {
     if (manifest != null) {
       Attributes mainAttributes = manifest.getMainAttributes();
 
-      String adapterType = mainAttributes.getValue(AdapterManifestAttributes.ADAPTER_TYPE);
+      Id.AdapterType adapterType = Id.AdapterType.from(mainAttributes.getValue(AdapterManifestAttributes.ADAPTER_TYPE));
       String adapterProgramType = mainAttributes.getValue(AdapterManifestAttributes.ADAPTER_PROGRAM_TYPE);
       String defaultAdapterProperties = mainAttributes.getValue(AdapterManifestAttributes.ADAPTER_PROPERTIES);
 

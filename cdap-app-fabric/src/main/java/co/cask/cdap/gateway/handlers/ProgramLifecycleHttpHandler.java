@@ -239,8 +239,8 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
     }
 
     try {
-      Id.Program program = Id.Program.from(namespaceId, appId, id);
       ProgramType programType = ProgramType.valueOfCategoryName(type);
+      Id.Program program = Id.Program.from(namespaceId, appId, programType, id);
       StatusMap statusMap = getStatus(program, programType);
       // If status is null, then there was an error
       if (statusMap.getStatus() == null) {
@@ -272,9 +272,10 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
       }
 
       String programName = scheduleSpec.getProgram().getProgramName();
-      Id.Program programId = Id.Program.from(namespaceId, appId, programName);
+      ProgramType programType = ProgramType.valueOfSchedulableType(scheduleSpec.getProgram().getProgramType());
+      Id.Program programId = Id.Program.from(namespaceId, appId, programType, programName);
       JsonObject json = new JsonObject();
-      json.addProperty("status", scheduler.scheduleState(programId, scheduleSpec.getProgram().getProgramType(),
+      json.addProperty("status", scheduler.scheduleState(programId, programId.getType().getSchedulableType(),
                                                          scheduleName).toString());
       responder.sendJson(HttpResponseStatus.OK, json);
     } catch (SecurityException e) {
@@ -333,7 +334,8 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
       }
 
       String programName = scheduleSpec.getProgram().getProgramName();
-      Id.Program programId = Id.Program.from(namespaceId, appId, programName);
+      ProgramType programType = ProgramType.valueOfSchedulableType(scheduleSpec.getProgram().getProgramType());
+      Id.Program programId = Id.Program.from(namespaceId, appId, programType, programName);
       Scheduler.ScheduleState state = scheduler.scheduleState(programId, scheduleSpec.getProgram().getProgramType(),
                                                               scheduleName);
       switch (state) {
@@ -375,51 +377,51 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
    * Default it returns all.
    */
   @GET
-  @Path("/apps/{app-id}/{runnable-type}/{runnable-id}/runs")
-  public void runnableHistory(HttpRequest request, HttpResponder responder,
-                              @PathParam("namespace-id") String namespaceId,
-                              @PathParam("app-id") String appId,
-                              @PathParam("runnable-type") String runnableType,
-                              @PathParam("runnable-id") String runnableId,
-                              @QueryParam("status") String status,
-                              @QueryParam("start") String startTs,
-                              @QueryParam("end") String endTs,
-                              @QueryParam("limit") @DefaultValue("100") final int resultLimit) {
-    ProgramType type = ProgramType.valueOfCategoryName(runnableType);
+  @Path("/apps/{app-id}/{program-type}/{program-id}/runs")
+  public void programHistory(HttpRequest request, HttpResponder responder,
+                             @PathParam("namespace-id") String namespaceId,
+                             @PathParam("app-id") String appId,
+                             @PathParam("program-type") String programType,
+                             @PathParam("program-id") String programId,
+                             @QueryParam("status") String status,
+                             @QueryParam("start") String startTs,
+                             @QueryParam("end") String endTs,
+                             @QueryParam("limit") @DefaultValue("100") final int resultLimit) {
+    ProgramType type = ProgramType.valueOfCategoryName(programType);
     if (type == null || type == ProgramType.WEBAPP) {
       responder.sendStatus(HttpResponseStatus.NOT_FOUND);
       return;
     }
     long start = (startTs == null || startTs.isEmpty()) ? Long.MIN_VALUE : Long.parseLong(startTs);
     long end = (endTs == null || endTs.isEmpty()) ? Long.MAX_VALUE : Long.parseLong(endTs);
-    getRuns(responder, namespaceId, appId, runnableId, status, start, end, resultLimit);
+    getRuns(responder, Id.Program.from(namespaceId, appId, type, programId), status, start, end, resultLimit);
   }
 
   /**
-   * Get runnable runtime args.
+   * Get program runtime args.
    */
   @GET
-  @Path("/apps/{app-id}/{runnable-type}/{runnable-id}/runtimeargs")
-  public void getRunnableRuntimeArgs(HttpRequest request, HttpResponder responder,
-                                     @PathParam("namespace-id") String namespaceId,
-                                     @PathParam("app-id") String appId,
-                                     @PathParam("runnable-type") String runnableType,
-                                     @PathParam("runnable-id") String runnableId) {
-    ProgramType type = ProgramType.valueOfCategoryName(runnableType);
+  @Path("/apps/{app-id}/{program-type}/{program-id}/runtimeargs")
+  public void getProgramRuntimeArgs(HttpRequest request, HttpResponder responder,
+                                    @PathParam("namespace-id") String namespaceId,
+                                    @PathParam("app-id") String appId,
+                                    @PathParam("program-type") String programType,
+                                    @PathParam("program-id") String programId) {
+    ProgramType type = ProgramType.valueOfCategoryName(programType);
     if (type == null || type == ProgramType.WEBAPP) {
       responder.sendStatus(HttpResponseStatus.NOT_FOUND);
       return;
     }
 
-    Id.Program id = Id.Program.from(namespaceId, appId, runnableId);
+    Id.Program id = Id.Program.from(namespaceId, appId, type, programId);
 
     try {
       if (!store.programExists(id, type)) {
-        responder.sendString(HttpResponseStatus.NOT_FOUND, "Runnable not found");
+        responder.sendString(HttpResponseStatus.NOT_FOUND, "Program not found");
         return;
       }
       Map<String, String> runtimeArgs = preferencesStore.getProperties(id.getNamespaceId(), appId,
-                                                                       runnableType, runnableId);
+                                                                       programType, programId);
       responder.sendJson(HttpResponseStatus.OK, runtimeArgs);
     } catch (Throwable e) {
       LOG.error("Error getting runtime args {}", e.getMessage(), e);
@@ -428,31 +430,30 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
   }
 
   /**
-   * Save runnable runtime args.
+   * Save program runtime args.
    */
   @PUT
-  @Path("/apps/{app-id}/{runnable-type}/{runnable-id}/runtimeargs")
-  public void saveRunnableRuntimeArgs(HttpRequest request, HttpResponder responder,
-                                      @PathParam("namespace-id") String namespaceId,
-                                      @PathParam("app-id") String appId,
-                                      @PathParam("runnable-type") String runnableType,
-                                      @PathParam("runnable-id") String runnableId) {
-    ProgramType type = ProgramType.valueOfCategoryName(runnableType);
+  @Path("/apps/{app-id}/{program-type}/{program-id}/runtimeargs")
+  public void saveProgramRuntimeArgs(HttpRequest request, HttpResponder responder,
+                                     @PathParam("namespace-id") String namespaceId,
+                                     @PathParam("app-id") String appId,
+                                     @PathParam("program-type") String programType,
+                                     @PathParam("program-id") String programId) {
+    ProgramType type = ProgramType.valueOfCategoryName(programType);
     if (type == null || type == ProgramType.WEBAPP) {
       responder.sendStatus(HttpResponseStatus.NOT_FOUND);
       return;
     }
 
-    Id.Program id = Id.Program.from(namespaceId, appId, runnableId);
-
+    Id.Program id = Id.Program.from(namespaceId, appId, type, programId);
 
     try {
       if (!store.programExists(id, type)) {
-        responder.sendString(HttpResponseStatus.NOT_FOUND, "Runnable not found");
+        responder.sendString(HttpResponseStatus.NOT_FOUND, "Program not found");
         return;
       }
       Map<String, String> args = decodeArguments(request);
-      preferencesStore.setProperties(namespaceId, appId, runnableType, runnableId, args);
+      preferencesStore.setProperties(namespaceId, appId, programType, programId, args);
       responder.sendStatus(HttpResponseStatus.OK);
     } catch (Throwable e) {
       LOG.error("Error getting runtime args {}", e.getMessage(), e);
@@ -461,21 +462,21 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
   }
 
   @GET
-  @Path("/apps/{app-id}/{runnable-type}/{runnable-id}")
-  public void runnableSpecification(HttpRequest request, HttpResponder responder,
-                                    @PathParam("namespace-id") String namespaceId, @PathParam("app-id") String appId,
-                                    @PathParam("runnable-type") String runnableType,
-                                    @PathParam("runnable-id") String runnableId) {
+  @Path("/apps/{app-id}/{program-type}/{program-id}")
+  public void programSpecification(HttpRequest request, HttpResponder responder,
+                                   @PathParam("namespace-id") String namespaceId, @PathParam("app-id") String appId,
+                                   @PathParam("program-type") String programType,
+                                   @PathParam("program-id") String programId) {
 
-    ProgramType type = getProgramType(runnableType);
+    ProgramType type = getProgramType(programType);
     if (type == null) {
-      responder.sendString(HttpResponseStatus.METHOD_NOT_ALLOWED, String.format("Program type '%s' not supported",
-                                                                                runnableType));
+      responder.sendString(HttpResponseStatus.BAD_REQUEST,
+                           String.format("Program type '%s' not supported", programType));
       return;
     }
 
     try {
-      Id.Program id = Id.Program.from(namespaceId, appId, runnableId);
+      Id.Program id = Id.Program.from(namespaceId, appId, type, programId);
       ProgramSpecification specification = getProgramSpecification(id, type);
       if (specification == null) {
         responder.sendStatus(HttpResponseStatus.NOT_FOUND);
@@ -526,8 +527,9 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
         return;
       }
       for (BatchEndpointStatus requestedObj : args) {
-        Id.Program progId = Id.Program.from(namespaceId, requestedObj.getAppId(), requestedObj.getProgramId());
         ProgramType programType = ProgramType.valueOfPrettyName(requestedObj.getProgramType());
+        Id.Program progId = Id.Program.from(namespaceId, requestedObj.getAppId(), programType,
+                                            requestedObj.getProgramId());
         // get th statuses
         try {
           StatusMap statusMap = getStatus(progId, programType);
@@ -581,7 +583,7 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
    *  {"appId": "App1", "programType": "Procedure", "programId": "Proc2", "statusCode": 200, "provisioned": 1,
    *   "requested": 3},
    *  {"appId": "App2", "programType": "Flow", "programId": "Flow1", "runnableId": "Flowlet1", "statusCode": 404,
-   *   "error": "Runnable": Flowlet1 not found"}]
+   *   "error": "Program": Flowlet1 not found"}]
    *
    * @param request
    * @param responder
@@ -613,7 +615,7 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
           continue;
         }
 
-        populateRunnableInstances(requestedObj, namespaceId, appId, spec, programType, requestedObj.getProgramId());
+        populateProgramInstances(requestedObj, namespaceId, appId, spec, programType, requestedObj.getProgramId());
       }
       responder.sendJson(HttpResponseStatus.OK, args);
     } catch (ApplicationNotFoundException e) {
@@ -719,8 +721,8 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
   @GET
   @Path("/apps/{app-id}/mapreduce")
   public void getMapreduceByApp(HttpRequest request, HttpResponder responder,
-                            @PathParam("namespace-id") String namespaceId,
-                            @PathParam("app-id") String appId) {
+                                @PathParam("namespace-id") String namespaceId,
+                                @PathParam("app-id") String appId) {
     getProgramsByApp(responder, namespaceId, appId, ProgramType.MAPREDUCE.getCategoryName());
   }
 
@@ -741,8 +743,8 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
   @GET
   @Path("/apps/{app-id}/spark")
   public void getSparkByApp(HttpRequest request, HttpResponder responder,
-                                @PathParam("namespace-id") String namespaceId,
-                                @PathParam("app-id") String appId) {
+                            @PathParam("namespace-id") String namespaceId,
+                            @PathParam("app-id") String appId) {
     getProgramsByApp(responder, namespaceId, appId, ProgramType.SPARK.getCategoryName());
   }
 
@@ -788,7 +790,7 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
                                  @PathParam("app-id") String appId,
                                  @PathParam("worker-id") String workerId) {
     try {
-      int count = store.getWorkerInstances(Id.Program.from(namespaceId, appId, workerId));
+      int count = store.getWorkerInstances(Id.Program.from(namespaceId, appId, ProgramType.WORKER, workerId));
       responder.sendJson(HttpResponseStatus.OK, new Instances(count));
     } catch (SecurityException e) {
       responder.sendStatus(HttpResponseStatus.UNAUTHORIZED);
@@ -822,7 +824,7 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
     }
 
     try {
-      Id.Program programId = Id.Program.from(namespaceId, appId, workerId);
+      Id.Program programId = Id.Program.from(namespaceId, appId, ProgramType.WORKER, workerId);
       int oldInstances = store.getWorkerInstances(programId);
       if (oldInstances != instances) {
         store.setWorkerInstances(programId, instances);
@@ -856,7 +858,7 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
                                   @PathParam("app-id") String appId, @PathParam("flow-id") String flowId,
                                   @PathParam("flowlet-id") String flowletId) {
     try {
-      int count = store.getFlowletInstances(Id.Program.from(namespaceId, appId, flowId), flowletId);
+      int count = store.getFlowletInstances(Id.Program.from(namespaceId, appId, ProgramType.FLOW, flowId), flowletId);
       responder.sendJson(HttpResponseStatus.OK, new Instances(count));
     } catch (SecurityException e) {
       responder.sendStatus(HttpResponseStatus.UNAUTHORIZED);
@@ -891,10 +893,10 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
     }
 
     try {
-      Id.Program programID = Id.Program.from(namespaceId, appId, flowId);
-      int oldInstances = store.getFlowletInstances(programID, flowletId);
+      Id.Program programId = Id.Program.from(namespaceId, appId, ProgramType.FLOW, flowId);
+      int oldInstances = store.getFlowletInstances(programId, flowletId);
       if (oldInstances != instances) {
-        store.setFlowletInstances(programID, flowletId, instances);
+        store.setFlowletInstances(programId, flowletId, instances);
         ProgramRuntimeService.RuntimeInfo runtimeInfo = findRuntimeInfo(namespaceId, appId, flowId, ProgramType.FLOW,
                                                                         runtimeService);
         if (runtimeInfo != null) {
@@ -941,8 +943,8 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
         return;
       }
 
-      Id.Program programID = Id.Program.from(namespaceId, appId, flowId);
-      store.changeFlowletSteamConnection(programID, flowletId, oldStreamId, streamId);
+      Id.Program programId = Id.Program.from(namespaceId, appId, ProgramType.FLOW, flowId);
+      store.changeFlowletSteamConnection(programId, flowletId, oldStreamId, streamId);
       responder.sendStatus(HttpResponseStatus.OK);
     } catch (SecurityException e) {
       responder.sendStatus(HttpResponseStatus.UNAUTHORIZED);
@@ -963,8 +965,8 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
                        @PathParam("program-id") String programId) {
     ProgramType type = getProgramType(programCategory);
     if (type == null) {
-      responder.sendString(HttpResponseStatus.METHOD_NOT_ALLOWED, String.format("Live-info not supported for program" +
-                                                                                  " type '%s'", programCategory));
+      responder.sendString(HttpResponseStatus.BAD_REQUEST,
+                           String.format("Live-info not supported for program type '%s'", programCategory));
       return;
     }
     getLiveInfo(request, responder, namespaceId, appId, programId, ProgramType.valueOfCategoryName(programCategory),
@@ -980,7 +982,7 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
                                @PathParam("namespace-id") String namespaceId,
                                @PathParam("app-id") String appId,
                                @PathParam("flow-id") String flowId) {
-    Id.Program programId = Id.Program.from(namespaceId, appId, flowId);
+    Id.Program programId = Id.Program.from(namespaceId, appId, ProgramType.FLOW, flowId);
     try {
       ProgramStatus status = getProgramStatus(programId, ProgramType.FLOW);
       if (status.getStatus().equals(HttpResponseStatus.NOT_FOUND.toString())) {
@@ -1045,7 +1047,7 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
                                   @PathParam("namespace-id") String namespaceId,
                                   @PathParam("app-id") String appId, @PathParam("workflow-id") String workflowId) {
     try {
-      Id.Program id = Id.Program.from(namespaceId, appId, workflowId);
+      Id.Program id = Id.Program.from(namespaceId, appId, ProgramType.WORKFLOW, workflowId);
       List<ScheduledRuntime> runtimes = scheduler.nextScheduledRuntime(id, SchedulableProgramType.WORKFLOW);
 
       JsonArray array = new JsonArray();
@@ -1117,9 +1119,9 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
                                   @PathParam("service-id") String serviceId,
                                   @PathParam("runnable-name") String runnableName) {
     try {
-      Id.Program programId = Id.Program.from(namespaceId, appId, serviceId);
+      Id.Program programId = Id.Program.from(namespaceId, appId, ProgramType.SERVICE, serviceId);
       if (!store.programExists(programId, ProgramType.SERVICE)) {
-        responder.sendString(HttpResponseStatus.NOT_FOUND, "Runnable not found");
+        responder.sendString(HttpResponseStatus.NOT_FOUND, "Service not found");
         return;
       }
 
@@ -1144,7 +1146,7 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
       }
 
       responder.sendJson(HttpResponseStatus.OK,
-                         new ServiceInstances(instances, getRunnableCount(namespaceId, appId, ProgramType.SERVICE,
+                         new ServiceInstances(instances, getInstanceCount(namespaceId, appId, ProgramType.SERVICE,
                                                                           serviceId, runnableName)));
 
     } catch (SecurityException e) {
@@ -1179,9 +1181,9 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
                                   @PathParam("runnable-name") String runnableName) {
 
     try {
-      Id.Program programId = Id.Program.from(namespaceId, appId, serviceId);
+      Id.Program programId = Id.Program.from(namespaceId, appId, ProgramType.SERVICE, serviceId);
       if (!store.programExists(programId, ProgramType.SERVICE)) {
-        responder.sendString(HttpResponseStatus.NOT_FOUND, "Runnable not found");
+        responder.sendString(HttpResponseStatus.NOT_FOUND, "Service not found");
         return;
       }
 
@@ -1240,7 +1242,7 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
       for (ProgramRecord flow : flows) {
         String appId = flow.getApp();
         String flowId = flow.getId();
-        Id.Program programId = Id.Program.from(namespaceId, appId, flowId);
+        Id.Program programId = Id.Program.from(namespaceId, appId, ProgramType.FLOW, flowId);
         ProgramStatus status = getProgramStatus(programId, ProgramType.FLOW);
         if (!"STOPPED".equals(status.getStatus())) {
           responder.sendString(HttpResponseStatus.FORBIDDEN,
@@ -1264,9 +1266,9 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
    * The program type passed here should be one that can have instances (flows, services or procedures)
    * Requires caller to do this validation.
    */
-  private void populateRunnableInstances(BatchEndpointInstances requestedObj, String namespaceId, String appId,
-                                         ApplicationSpecification spec, ProgramType programType,
-                                         String programId) {
+  private void populateProgramInstances(BatchEndpointInstances requestedObj, String namespaceId, String appId,
+                                        ApplicationSpecification spec, ProgramType programType,
+                                        String programId) {
     int requested;
     String runnableId;
     if (programType == ProgramType.PROCEDURE) {
@@ -1277,7 +1279,7 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
                      "Procedure: " + programId + " not found");
         return;
       }
-      requested = store.getProcedureInstances(Id.Program.from(namespaceId, appId, programId));
+      requested = store.getProcedureInstances(Id.Program.from(namespaceId, appId, ProgramType.PROCEDURE, programId));
     } else if (programType == ProgramType.WORKER) {
       runnableId = programId;
       if (!spec.getWorkers().containsKey(programId)) {
@@ -1285,7 +1287,7 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
                      "Worker: " + programId + " not found");
         return;
       }
-      requested = store.getWorkerInstances(Id.Program.from(namespaceId, appId, programId));
+      requested = store.getWorkerInstances(Id.Program.from(namespaceId, appId, ProgramType.PROCEDURE, programId));
     } else {
       // services and flows must have runnable id
       if (requestedObj.getRunnableId() == null) {
@@ -1336,7 +1338,7 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
     }
     // use the pretty name of program types to be consistent
     requestedObj.setProgramType(programType.getPrettyName());
-    int provisioned = getRunnableCount(namespaceId, appId, programType, programId, runnableId);
+    int provisioned = getInstanceCount(namespaceId, appId, programType, programId, runnableId);
     requestedObj.setStatusCode(HttpResponseStatus.OK.getCode());
     requestedObj.setRequested(requested);
     requestedObj.setProvisioned(provisioned);
@@ -1388,31 +1390,31 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
       final SettableFuture<StatusMap> statusFuture = SettableFuture.create();
       workflowClient.getWorkflowStatus(id.getNamespaceId(), id.getApplicationId(),
                                        workflowName, new WorkflowClient.Callback() {
-        @Override
-        public void handle(WorkflowClient.Status status) {
-          StatusMap result = new StatusMap();
+          @Override
+          public void handle(WorkflowClient.Status status) {
+            StatusMap result = new StatusMap();
 
-          if (status.getCode().equals(WorkflowClient.Status.Code.OK)) {
-            result.setStatus("RUNNING");
-            result.setStatusCode(HttpResponseStatus.OK.getCode());
-          } else {
-            //mapreduce name might follow the same format even when its not part of the workflow.
-            try {
-              // getProgramStatus returns program status or http response status NOT_FOUND
-              getProgramStatus(id, type, result);
-            } catch (Exception e) {
-              LOG.error("Exception raised when getting program status for {} {}", id, type, e);
-              // error occurred so say internal server error
-              result.setStatusCode(HttpResponseStatus.INTERNAL_SERVER_ERROR.getCode());
-              result.setError(e.getMessage());
+            if (status.getCode().equals(WorkflowClient.Status.Code.OK)) {
+              result.setStatus("RUNNING");
+              result.setStatusCode(HttpResponseStatus.OK.getCode());
+            } else {
+              //mapreduce name might follow the same format even when its not part of the workflow.
+              try {
+                // getProgramStatus returns program status or http response status NOT_FOUND
+                getProgramStatus(id, type, result);
+              } catch (Exception e) {
+                LOG.error("Exception raised when getting program status for {} {}", id, type, e);
+                // error occurred so say internal server error
+                result.setStatusCode(HttpResponseStatus.INTERNAL_SERVER_ERROR.getCode());
+                result.setError(e.getMessage());
+              }
             }
-          }
 
-          // This would make all changes in the result statusMap available to the other thread that doing
-          // the take() call.
-          statusFuture.set(result);
+            // This would make all changes in the result statusMap available to the other thread that doing
+            // the take() call.
+            statusFuture.set(result);
+          }
         }
-      }
       );
       // wait for status to come back in case we are polling mapreduce status in workflow
       // status map contains either a status or an error
@@ -1523,21 +1525,21 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
         return null;
       }
 
-      String runnableId = id.getId();
+      String programId = id.getId();
       ProgramSpecification programSpec;
-      if (type == ProgramType.FLOW && appSpec.getFlows().containsKey(runnableId)) {
+      if (type == ProgramType.FLOW && appSpec.getFlows().containsKey(programId)) {
         programSpec = appSpec.getFlows().get(id.getId());
-      } else if (type == ProgramType.PROCEDURE && appSpec.getProcedures().containsKey(runnableId)) {
+      } else if (type == ProgramType.PROCEDURE && appSpec.getProcedures().containsKey(programId)) {
         programSpec = appSpec.getProcedures().get(id.getId());
-      } else if (type == ProgramType.MAPREDUCE && appSpec.getMapReduce().containsKey(runnableId)) {
+      } else if (type == ProgramType.MAPREDUCE && appSpec.getMapReduce().containsKey(programId)) {
         programSpec = appSpec.getMapReduce().get(id.getId());
-      } else if (type == ProgramType.SPARK && appSpec.getSpark().containsKey(runnableId)) {
+      } else if (type == ProgramType.SPARK && appSpec.getSpark().containsKey(programId)) {
         programSpec = appSpec.getSpark().get(id.getId());
-      } else if (type == ProgramType.WORKFLOW && appSpec.getWorkflows().containsKey(runnableId)) {
+      } else if (type == ProgramType.WORKFLOW && appSpec.getWorkflows().containsKey(programId)) {
         programSpec = appSpec.getWorkflows().get(id.getId());
-      } else if (type == ProgramType.SERVICE && appSpec.getServices().containsKey(runnableId)) {
+      } else if (type == ProgramType.SERVICE && appSpec.getServices().containsKey(programId)) {
         programSpec = appSpec.getServices().get(id.getId());
-      } else if (type == ProgramType.WORKER && appSpec.getWorkers().containsKey(runnableId)) {
+      } else if (type == ProgramType.WORKER && appSpec.getWorkers().containsKey(programId)) {
         programSpec = appSpec.getWorkers().get(id.getId());
       } else {
         programSpec = null;
@@ -1564,24 +1566,24 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
   }
 
   private synchronized void startStopProgram(HttpRequest request, HttpResponder responder, String namespaceId,
-                                             String appId, ProgramType runnableType, String runnableId,
+                                             String appId, ProgramType programType, String programId,
                                              String action) {
-    if (runnableType == null || (runnableType == ProgramType.WORKFLOW && "stop".equals(action))) {
+    if (programType == null || (programType == ProgramType.WORKFLOW && "stop".equals(action))) {
       responder.sendStatus(HttpResponseStatus.NOT_FOUND);
     } else {
       LOG.trace("{} call from AppFabricHttpHandler for app {}, flow type {} id {}",
-                action, appId, runnableType, runnableId);
-      runnableStartStop(request, responder, namespaceId, appId, runnableId, runnableType, action);
+                action, appId, programType, programId);
+      programStartStop(request, responder, namespaceId, appId, programId, programType, action);
     }
   }
 
   /**
    * Protected temporarily until all v2 APIs are migrated (webapp APIs in this case).
    */
-  protected void runnableStartStop(HttpRequest request, HttpResponder responder, String namespaceId, String appId,
-                                   String runnableId, ProgramType type, String action) {
+  protected void programStartStop(HttpRequest request, HttpResponder responder, String namespaceId, String appId,
+                                  String programId, ProgramType type, String action) {
     try {
-      Id.Program id = Id.Program.from(namespaceId, appId, runnableId);
+      Id.Program id = Id.Program.from(namespaceId, appId, type, programId);
       AppFabricServiceStatus status = null;
       if ("start".equals(action)) {
         status = start(id, type, decodeArguments(request), false);
@@ -1715,10 +1717,9 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
     }
   }
 
-  private void getRuns(HttpResponder responder, String namespaceId, String appId, String runnableId, String status,
+  private void getRuns(HttpResponder responder, Id.Program programId, String status,
                        long start, long end, int limit) {
     try {
-      Id.Program programId = Id.Program.from(namespaceId, appId, runnableId);
       try {
         ProgramRunStatus runStatus = (status == null) ? ProgramRunStatus.ALL :
           ProgramRunStatus.valueOf(status.toUpperCase());
@@ -1947,9 +1948,9 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
    * @param runnableId
    * @return
    */
-  private int getRunnableCount(String namespaceId, String appId, ProgramType programType,
+  private int getInstanceCount(String namespaceId, String appId, ProgramType programType,
                                String programId, String runnableId) {
-    Id.Program id = Id.Program.from(namespaceId, appId, programId);
+    Id.Program id = Id.Program.from(namespaceId, appId, programType, programId);
     ProgramLiveInfo info = runtimeService.getLiveInfo(id, programType);
     int count = 0;
     if (info instanceof NotRunningProgramLiveInfo) {

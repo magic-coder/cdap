@@ -742,8 +742,7 @@ public class DefaultStore implements Store {
           ApplicationSpecification appSpec = getAppSpecOrFail(mds, program);
           Map<String, ScheduleSpecification> schedules = Maps.newHashMap(appSpec.getSchedules());
           String scheduleName = spec.getSchedule().getName();
-          SchedulableProgramType programType = spec.getProgram().getProgramType();
-          Id.Schedule schedule = Id.Schedule.from(program, programType, scheduleName);
+          Id.Schedule schedule = Id.Schedule.from(program, scheduleName);
 
           if (schedules.containsKey(scheduleName)) {
             throw new ScheduleAlreadyExistsException(schedule);
@@ -925,7 +924,7 @@ public class DefaultStore implements Store {
     txnl.executeUnchecked(new TransactionExecutor.Function<AppMds, Void>() {
       @Override
       public Void apply(AppMds mds) throws Exception {
-        mds.apps.createAdapter(adapter, adapterSpec, AdapterStatus.STARTED);
+        mds.apps.writeAdapter(adapter.getNamespace(), adapterSpec, AdapterStatus.STARTED);
         return null;
       }
     });
@@ -938,7 +937,7 @@ public class DefaultStore implements Store {
     return txnl.executeUnchecked(new TransactionExecutor.Function<AppMds, AdapterSpecification>() {
       @Override
       public AdapterSpecification apply(AppMds mds) throws Exception {
-        return mds.apps.getAdapterSpec(adapter);
+        return mds.apps.getAdapter(adapter);
       }
     });
   }
@@ -961,7 +960,7 @@ public class DefaultStore implements Store {
     return txnl.executeUnchecked(new TransactionExecutor.Function<AppMds, AdapterStatus>() {
       @Override
       public AdapterStatus apply(AppMds mds) throws Exception {
-        return mds.apps.updateAdapterStatus(adapter, status);
+        return mds.apps.setAdapterStatus(adapter, status);
       }
     });
   }
@@ -990,10 +989,10 @@ public class DefaultStore implements Store {
   @Override
   public void removeAllAdapters(final Id.Namespace id) throws NamespaceNotFoundException {
     try {
-      txnl.executeUnchecked(new TransactionExecutor.Function<AppMds, Void>() {
+      txnl.execute(new TransactionExecutor.Function<AppMds, Void>() {
         @Override
         public Void apply(AppMds mds) throws Exception {
-          mds.apps.deleteAllAdapters(id);
+          mds.apps.deleteAdapters(id);
           return null;
         }
       });

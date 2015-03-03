@@ -21,4 +21,16 @@ package co.cask.cdap.common.exception;
  */
 public class UnauthorizedException extends Exception {
 
+  public UnauthorizedException() {
+    super();
+  }
+
+  public UnauthorizedException(String msg) {
+    super(msg);
+  }
+
+  public UnauthorizedException(String msg, Throwable throwable) {
+    super(msg, throwable);
+  }
+
 }

@@ -26,6 +26,7 @@ import co.cask.cdap.config.PreferencesStore;
 import co.cask.cdap.internal.app.runtime.ProgramOptionConstants;
 import co.cask.cdap.internal.app.services.http.AppFabricTestBase;
 import co.cask.cdap.proto.AdapterSpecification;
+import co.cask.cdap.proto.Id;
 import co.cask.cdap.proto.ProgramType;
 import co.cask.cdap.proto.Sink;
 import co.cask.cdap.proto.Source;
@@ -87,24 +88,24 @@ public class AdapterServiceTests extends AppFabricTestBase {
     } catch (AdapterAlreadyExistsException expected) {
     }
 
-    AdapterSpecification actualAdapterSpec = adapterService.getAdapter(TEST_NAMESPACE1, adapterName);
+    AdapterSpecification actualAdapterSpec = adapterService.getAdapter(Id.Adapter.from(TEST_NAMESPACE1, adapterName));
     Assert.assertNotNull(actualAdapterSpec);
     Assert.assertEquals(adapterSpecification, actualAdapterSpec);
 
     // list all adapters
-    Collection<AdapterSpecification> adapters = adapterService.getAdapters(TEST_NAMESPACE1);
+    Collection<AdapterSpecification> adapters = adapterService.getAdapters(Id.Namespace.from(TEST_NAMESPACE1));
     Assert.assertArrayEquals(new AdapterSpecification[] {adapterSpecification}, adapters.toArray());
 
     // Delete Adapter
-    adapterService.removeAdapter(TEST_NAMESPACE1, "myAdapter");
+    adapterService.removeAdapter(Id.Adapter.from(TEST_NAMESPACE1, "myAdapter"));
     // verify that the adapter is deleted
     try {
-      adapterService.getAdapter(TEST_NAMESPACE1, adapterName);
+      adapterService.getAdapter(Id.Adapter.from(TEST_NAMESPACE1, adapterName));
       Assert.fail(String.format("Found adapterSpec with name %s; it should be deleted.", adapterName));
     } catch (AdapterNotFoundException expected) {
     }
 
-    adapters = adapterService.getAdapters(TEST_NAMESPACE1);
+    adapters = adapterService.getAdapters(Id.Namespace.from(TEST_NAMESPACE1));
     Assert.assertTrue(adapters.isEmpty());
   }
 
@@ -118,7 +119,7 @@ public class AdapterServiceTests extends AppFabricTestBase {
 
     // Using a valid manifest (no missing attributes) results in the adapterTypeInfo being registered
     adapterService.registerAdapters();
-    Assert.assertNotNull(adapterService.getAdapterTypeInfo(adapterType));
+    Assert.assertNotNull(adapterService.getAdapterTypeInfo(Id.AdapterType.from(adapterType)));
 
     // removing the any of the required attributes from the manifest results in the AdapterTypeInfo not being created.
     // Missing the CDAP-Source-Type attribute
@@ -130,7 +131,7 @@ public class AdapterServiceTests extends AppFabricTestBase {
     setupAdapterJarWithManifestAttributes(clz, attributes);
 
     adapterService.registerAdapters();
-    Assert.assertNull(adapterService.getAdapterTypeInfo(adapterType));
+    Assert.assertNull(adapterService.getAdapterTypeInfo(Id.AdapterType.from(adapterType)));
 
     // Missing the CDAP-Sink-Type attribute
     adapterType = "adapterType2";
@@ -141,7 +142,7 @@ public class AdapterServiceTests extends AppFabricTestBase {
     setupAdapterJarWithManifestAttributes(clz, attributes);
 
     adapterService.registerAdapters();
-    Assert.assertNull(adapterService.getAdapterTypeInfo(adapterType));
+    Assert.assertNull(adapterService.getAdapterTypeInfo(Id.AdapterType.from(adapterType)));
 
     // Missing the CDAP-Adapter-Type attribute
     adapterType = "adapterType3";
@@ -152,7 +153,7 @@ public class AdapterServiceTests extends AppFabricTestBase {
     setupAdapterJarWithManifestAttributes(clz, attributes);
 
     adapterService.registerAdapters();
-    Assert.assertNull(adapterService.getAdapterTypeInfo(adapterType));
+    Assert.assertNull(adapterService.getAdapterTypeInfo(Id.AdapterType.from(adapterType)));
 
     // Missing the CDAP-Adapter-Program-Type attribute
     adapterType = "adapterType4";
@@ -163,7 +164,7 @@ public class AdapterServiceTests extends AppFabricTestBase {
     setupAdapterJarWithManifestAttributes(clz, attributes);
 
     adapterService.registerAdapters();
-    Assert.assertNull(adapterService.getAdapterTypeInfo(adapterType));
+    Assert.assertNull(adapterService.getAdapterTypeInfo(Id.AdapterType.from(adapterType)));
   }
 
   private static Attributes generateRequiredAttributes(Class<?> clz, String adapterType) {

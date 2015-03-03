@@ -31,6 +31,7 @@ import co.cask.cdap.app.services.Data;
 import co.cask.cdap.app.store.Store;
 import co.cask.cdap.common.conf.Constants;
 import co.cask.cdap.common.exception.ApplicationNotFoundException;
+import co.cask.cdap.common.exception.BadRequestException;
 import co.cask.cdap.data2.dataset2.DatasetFramework;
 import co.cask.cdap.gateway.auth.Authenticator;
 import co.cask.cdap.gateway.handlers.AuthenticatedHttpHandler;
@@ -137,22 +138,25 @@ public abstract class AbstractAppFabricHttpHandler extends AuthenticatedHttpHand
     super(authenticator);
   }
 
-  protected int getInstances(HttpRequest request) throws IOException, NumberFormatException {
+  protected int getInstances(HttpRequest request) throws IOException, NumberFormatException, BadRequestException {
     return parseBody(request, Instances.class).getInstances();
   }
 
-  @Nullable
-  protected <T> T parseBody(HttpRequest request, Class<T> type) throws IOException {
+  protected <T> T parseBody(HttpRequest request, Class<T> type) throws IOException, BadRequestException {
     ChannelBuffer content = request.getContent();
     if (!content.readable()) {
       return null;
     }
     Reader reader = new InputStreamReader(new ChannelBufferInputStream(content), Charsets.UTF_8);
     try {
-      return GSON.fromJson(reader, type);
+      T result = GSON.fromJson(reader, type);
+      if (result == null) {
+        throw new BadRequestException();
+      }
+      return result;
     } catch (JsonSyntaxException e) {
       LOG.info("Failed to parse body on {} as {}", request.getUri(), type, e);
-      throw e;
+      throw new BadRequestException("Invalid JSON");
     } finally {
       reader.close();
     }
@@ -283,14 +287,13 @@ public abstract class AbstractAppFabricHttpHandler extends AuthenticatedHttpHand
   }
 
   protected ProgramRuntimeService.RuntimeInfo findRuntimeInfo(String namespaceId, String appId,
-                                                              String flowId, ProgramType typeId,
+                                                              String flowId, ProgramType type,
                                                               ProgramRuntimeService runtimeService) {
-    ProgramType type = ProgramType.valueOf(typeId.name());
     Collection<ProgramRuntimeService.RuntimeInfo> runtimeInfos = runtimeService.list(type).values();
     Preconditions.checkNotNull(runtimeInfos, UserMessages.getMessage(UserErrors.RUNTIME_INFO_NOT_FOUND),
                                namespaceId, flowId);
 
-    Id.Program programId = Id.Program.from(namespaceId, appId, flowId);
+    Id.Program programId = Id.Program.from(namespaceId, appId, type, flowId);
 
     for (ProgramRuntimeService.RuntimeInfo info : runtimeInfos) {
       if (programId.equals(info.getProgramId())) {
@@ -305,7 +308,7 @@ public abstract class AbstractAppFabricHttpHandler extends AuthenticatedHttpHand
                              ProgramRuntimeService runtimeService) {
     try {
       responder.sendJson(HttpResponseStatus.OK,
-                         runtimeService.getLiveInfo(Id.Program.from(namespaceId, appId, programId), type));
+                         runtimeService.getLiveInfo(Id.Program.from(namespaceId, appId, type, programId), type));
     } catch (SecurityException e) {
       responder.sendStatus(HttpResponseStatus.UNAUTHORIZED);
     } catch (Throwable e) {
@@ -332,18 +335,27 @@ public abstract class AbstractAppFabricHttpHandler extends AuthenticatedHttpHand
     return false;
   }
 
+  // TODO: refactor
   protected final void dataList(HttpRequest request, HttpResponder responder, Store store, DatasetFramework dsFramework,
-                                Data type, String namespace, String name, String appId) {
+                                Data type, String namespaceId, String name, String appId) {
     try {
       if ((name != null && name.isEmpty()) || (appId != null && appId.isEmpty())) {
         responder.sendString(HttpResponseStatus.BAD_REQUEST, "Empty name provided");
         return;
       }
 
-      Id.Program program = Id.Program.from(namespace, appId == null ? "" : appId, "");
-      String json = name != null ? getDataEntity(store, dsFramework, program, type, name) :
-        appId != null ? listDataEntitiesByApp(store, dsFramework, program, type)
-          : listDataEntities(store, dsFramework, program, type);
+      Id.Namespace namespace = Id.Namespace.from(namespaceId);
+
+      String json;
+      if (name != null) {
+        json = getDataEntity(store, dsFramework, namespace, type, name);
+      } else if (appId != null) {
+        Id.Application app = Id.Application.from(namespace, appId);
+        json = listDataEntitiesByApp(store, dsFramework, app, type);
+      } else {
+        json = listDataEntities(store, dsFramework, namespace, type);
+      }
+
       if (json.isEmpty()) {
         responder.sendStatus(HttpResponseStatus.NOT_FOUND);
       } else {
@@ -361,8 +373,7 @@ public abstract class AbstractAppFabricHttpHandler extends AuthenticatedHttpHand
   }
 
   private String getDataEntity(Store store, DatasetFramework dsFramework,
-                               Id.Program programId, Data type, String name) {
-    Id.Namespace namespace = new Id.Namespace(programId.getNamespaceId());
+                               Id.Namespace namespace, Data type, String name) {
     if (type == Data.DATASET) {
       DatasetSpecification dsSpec = getDatasetSpec(dsFramework, namespace, name);
       return dsSpec == null ? "" : GSON.toJson(makeDataSetRecord(name, dsSpec.getType()));
@@ -374,17 +385,16 @@ public abstract class AbstractAppFabricHttpHandler extends AuthenticatedHttpHand
   }
 
   private String listDataEntities(Store store, DatasetFramework dsFramework,
-                                  Id.Program programId, Data type) throws Exception {
-    Id.Namespace namespaceId = Id.Namespace.from(programId.getNamespaceId());
+                                  Id.Namespace namespace, Data type) throws Exception {
     if (type == Data.DATASET) {
-      Collection<DatasetSpecification> instances = dsFramework.getInstances(namespaceId);
+      Collection<DatasetSpecification> instances = dsFramework.getInstances(namespace);
       List<DatasetRecord> result = Lists.newArrayListWithExpectedSize(instances.size());
       for (DatasetSpecification instance : instances) {
         result.add(makeDataSetRecord(instance.getName(), instance.getType()));
       }
       return GSON.toJson(result);
     } else if (type == Data.STREAM) {
-      Collection<StreamSpecification> specs = store.getAllStreams(namespaceId);
+      Collection<StreamSpecification> specs = store.getAllStreams(namespace);
       List<StreamRecord> result = Lists.newArrayListWithExpectedSize(specs.size());
       for (StreamSpecification spec : specs) {
         result.add(makeStreamRecord(spec.getName(), null));
@@ -396,10 +406,8 @@ public abstract class AbstractAppFabricHttpHandler extends AuthenticatedHttpHand
   }
 
   private String listDataEntitiesByApp(Store store, DatasetFramework dsFramework,
-                                       Id.Program programId, Data type) throws Exception {
-    Id.Namespace namespace = new Id.Namespace(programId.getNamespaceId());
-    ApplicationSpecification appSpec = store.getApplication(new Id.Application(
-      namespace, programId.getApplicationId()));
+                                       Id.Application app, Data type) throws Exception {
+    ApplicationSpecification appSpec = store.getApplication(app);
     if (appSpec == null) {
       return "";
     }
@@ -408,7 +416,7 @@ public abstract class AbstractAppFabricHttpHandler extends AuthenticatedHttpHand
       List<DatasetRecord> result = Lists.newArrayListWithExpectedSize(dataSetsUsed.size());
       for (String dsName : dataSetsUsed) {
         String typeName = null;
-        DatasetSpecification dsSpec = getDatasetSpec(dsFramework, namespace, dsName);
+        DatasetSpecification dsSpec = getDatasetSpec(dsFramework, app.getNamespace(), dsName);
         if (dsSpec != null) {
           typeName = dsSpec.getType();
         }
@@ -480,14 +488,14 @@ public abstract class AbstractAppFabricHttpHandler extends AuthenticatedHttpHand
 
   protected final void programListByDataAccess(HttpRequest request, HttpResponder responder,
                                                Store store, DatasetFramework dsFramework,
-                                               ProgramType type, Data data, String namespace, String name) {
+                                               ProgramType type, Data data, String namespaceId, String name) {
     try {
       if (name.isEmpty()) {
         responder.sendString(HttpResponseStatus.BAD_REQUEST, data.prettyName().toLowerCase() + " name is empty");
         return;
       }
-      Id.Program programId = Id.Program.from(namespace, "", "");
-      List<ProgramRecord> programRecords = listProgramsByDataAccess(store, dsFramework, programId, type, data, name);
+      Id.Namespace namespace = Id.Namespace.from(namespaceId);
+      List<ProgramRecord> programRecords = listProgramsByDataAccess(store, dsFramework, namespace, type, data, name);
       if (programRecords == null) {
         responder.sendStatus(HttpResponseStatus.NOT_FOUND);
       } else {
@@ -506,12 +514,11 @@ public abstract class AbstractAppFabricHttpHandler extends AuthenticatedHttpHand
    * dataset does not exist
    */
   private List<ProgramRecord> listProgramsByDataAccess(Store store, DatasetFramework dsFramework,
-                                                       Id.Program programId, ProgramType type,
+                                                       Id.Namespace namespace, ProgramType type,
                                                        Data data, String name) throws Exception {
-    Id.Namespace namespaceId = programId.getApplication().getNamespace();
     // search all apps for programs that use this
     List<ProgramRecord> result = Lists.newArrayList();
-    Collection<ApplicationSpecification> appSpecs = store.getAllApplications(namespaceId);
+    Collection<ApplicationSpecification> appSpecs = store.getAllApplications(namespace);
     if (appSpecs != null) {
       for (ApplicationSpecification appSpec : appSpecs) {
         if (type == ProgramType.FLOW) {
@@ -548,7 +555,7 @@ public abstract class AbstractAppFabricHttpHandler extends AuthenticatedHttpHand
     // if no programs were found, check whether the data exists, return [] if yes, null if not
     boolean exists = false;
     if (data == Data.DATASET) {
-      exists = dsFramework.hasInstance(Id.DatasetInstance.from(namespaceId, name));
+      exists = dsFramework.hasInstance(Id.DatasetInstance.from(namespace, name));
     } else if (data == Data.STREAM) {
       exists = store.getStream(new Id.Namespace(Constants.DEFAULT_NAMESPACE), name) != null;
     }

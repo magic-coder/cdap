@@ -177,7 +177,7 @@ public class DefaultStore implements Store {
     txnl.executeUnchecked(new TransactionExecutor.Function<AppMds, Void>() {
       @Override
       public Void apply(AppMds mds) throws Exception {
-        mds.apps.recordProgramStart(id.getNamespaceId(), id.getApplicationId(), id.getId(), pid, startTime);
+        mds.apps.recordProgramStart(id, pid, startTime);
         return null;
       }
     });
@@ -190,7 +190,7 @@ public class DefaultStore implements Store {
     txnl.executeUnchecked(new TransactionExecutor.Function<AppMds, Void>() {
       @Override
       public Void apply(AppMds mds) throws Exception {
-        mds.apps.recordProgramStop(id.getNamespaceId(), id.getApplicationId(), id.getId(), pid, endTime, state);
+        mds.apps.recordProgramStop(id, pid, endTime, state);
         return null;
       }
     });
@@ -206,8 +206,7 @@ public class DefaultStore implements Store {
     return txnl.executeUnchecked(new TransactionExecutor.Function<AppMds, List<RunRecord>>() {
       @Override
       public List<RunRecord> apply(AppMds mds) throws Exception {
-        return mds.apps.getRuns(id.getNamespaceId(), id.getApplicationId(), id.getId(), status,
-                                startTime, endTime, limit);
+        return mds.apps.getRuns(id, status, startTime, endTime, limit);
       }
     });
   }
@@ -565,7 +564,7 @@ public class DefaultStore implements Store {
     txnl.executeUnchecked(new TransactionExecutor.Function<AppMds, Void>() {
       @Override
       public Void apply(AppMds mds) throws Exception {
-        mds.apps.writeProgramArgs(id.getNamespaceId(), id.getApplicationId(), id.getId(), arguments);
+        mds.apps.writeProgramArgs(id, arguments);
         return null;
       }
     });
@@ -576,7 +575,7 @@ public class DefaultStore implements Store {
     return txnl.executeUnchecked(new TransactionExecutor.Function<AppMds, Map<String, String>>() {
       @Override
       public Map<String, String> apply(AppMds mds) throws Exception {
-        ProgramArgs programArgs = mds.apps.getProgramArgs(id.getNamespaceId(), id.getApplicationId(), id.getId());
+        ProgramArgs programArgs = mds.apps.getProgramArgs(id);
         return programArgs == null ? Maps.<String, String>newHashMap() : programArgs.getArgs();
       }
     });

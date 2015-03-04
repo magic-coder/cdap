@@ -19,15 +19,18 @@ package co.cask.cdap.client;
 import co.cask.cdap.api.common.Bytes;
 import co.cask.cdap.api.flow.flowlet.StreamEvent;
 import co.cask.cdap.client.common.ClientTestBase;
+import co.cask.cdap.client.config.ClientConfig;
 import co.cask.cdap.common.exception.BadRequestException;
 import co.cask.cdap.common.exception.StreamNotFoundException;
 import co.cask.cdap.common.exception.UnAuthorizedAccessTokenException;
+import co.cask.cdap.proto.NamespaceMeta;
 import co.cask.cdap.proto.StreamProperties;
 import co.cask.cdap.test.XSlowTests;
 import com.google.common.base.Charsets;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.Lists;
 import com.google.common.io.ByteStreams;
+import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -47,14 +50,37 @@ import java.util.concurrent.TimeUnit;
 public class StreamClientTestRun extends ClientTestBase {
 
   private static final Logger LOG = LoggerFactory.getLogger(StreamClientTestRun.class);
+  private static final String STREAM_CLIENT_TEST_RUN_NAMESPACE = "streamClientTestRunNamespace";
 
   private StreamClient streamClient;
+  private NamespaceClient namespaceClient;
 
   @Before
   public void setUp() throws Throwable {
     super.setUp();
-    streamClient = new StreamClient(clientConfig);
+    namespaceClient = new NamespaceClient(clientConfig);
+    try {
+      namespaceClient.create(new NamespaceMeta.Builder().setId(STREAM_CLIENT_TEST_RUN_NAMESPACE).build());
+    } catch (Exception e) {
+    }
+
+    // streamClient operates completely within the namespace STREAM_CLIENT_TEST_RUN_NAMESPACE
+    streamClient = new StreamClient(new ClientConfig.Builder(clientConfig)
+                                      .setNamespace(STREAM_CLIENT_TEST_RUN_NAMESPACE)
+                                      .build());
   }
+
+  @After
+  public void tearDownStandalone() throws Exception {
+    super.tearDownStandalone();
+//    namespaceClient.delete(STREAM_CLIENT_TEST_RUN_NAMESPACE);
+  }
+
+//  @AfterClass
+//  public static void tearDown() throws Exception {
+//    new NamespaceClient(new ClientConfig.Builder().setHostname(HOSTNAME).setPort(PORT).build())
+//      .delete(STREAM_CLIENT_TEST_RUN_NAMESPACE);
+//  }
 
   @Test
   public void testAll() throws Exception {

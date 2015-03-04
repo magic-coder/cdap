@@ -21,6 +21,7 @@ import co.cask.cdap.api.data.schema.Schema;
 import co.cask.cdap.api.data.schema.UnsupportedTypeException;
 import co.cask.cdap.common.conf.CConfiguration;
 import co.cask.cdap.common.conf.Constants;
+import co.cask.cdap.common.exception.NotFoundException;
 import co.cask.cdap.common.metrics.MetricsCollectionService;
 import co.cask.cdap.common.metrics.MetricsCollector;
 import co.cask.cdap.data.format.RecordFormats;
@@ -32,6 +33,7 @@ import co.cask.cdap.data.stream.service.upload.FileContentWriterFactory;
 import co.cask.cdap.data.stream.service.upload.StreamBodyConsumerFactory;
 import co.cask.cdap.data2.transaction.stream.StreamAdmin;
 import co.cask.cdap.data2.transaction.stream.StreamConfig;
+import co.cask.cdap.data2.util.DiscoveryNamespaceClient;
 import co.cask.cdap.gateway.auth.Authenticator;
 import co.cask.cdap.gateway.handlers.AuthenticatedHttpHandler;
 import co.cask.cdap.internal.io.SchemaTypeAdapter;
@@ -105,6 +107,7 @@ public final class StreamHandler extends AuthenticatedHttpHandler {
   private final ConcurrentStreamWriter streamWriter;
   private final long batchBufferThreshold;
   private final StreamBodyConsumerFactory streamBodyConsumerFactory;
+  private final DiscoveryNamespaceClient discoveryNamespaceClient;
 
   // Executor for serving async enqueue requests
   private ExecutorService asyncExecutor;
@@ -120,7 +123,8 @@ public final class StreamHandler extends AuthenticatedHttpHandler {
                        StreamCoordinatorClient streamCoordinatorClient, StreamAdmin streamAdmin,
                        StreamMetaStore streamMetaStore, StreamFileWriterFactory writerFactory,
                        final MetricsCollectionService metricsCollectionService,
-                       StreamWriterSizeCollector sizeCollector) {
+                       StreamWriterSizeCollector sizeCollector,
+                       DiscoveryNamespaceClient discoveryNamespaceClient) {
     super(authenticator);
     this.cConf = cConf;
     this.streamAdmin = streamAdmin;
@@ -140,6 +144,7 @@ public final class StreamHandler extends AuthenticatedHttpHandler {
     this.streamWriter = new ConcurrentStreamWriter(streamCoordinatorClient, streamAdmin, streamMetaStore, writerFactory,
                                                    cConf.getInt(Constants.Stream.WORKER_THREADS),
                                                    metricsCollectorFactory);
+    this.discoveryNamespaceClient = discoveryNamespaceClient;
   }
 
   @Override
@@ -194,6 +199,9 @@ public final class StreamHandler extends AuthenticatedHttpHandler {
       // Verify stream name
       Id.Stream streamId = Id.Stream.from(namespaceId, stream);
 
+      // Check for namespace existence. Throws NotFoundException if namespace doesn't exist
+      discoveryNamespaceClient.get(namespaceId);
+
       // TODO: Modify the REST API to support custom configurations.
       streamAdmin.create(streamId);
       streamMetaStore.addStream(streamId);
@@ -201,8 +209,11 @@ public final class StreamHandler extends AuthenticatedHttpHandler {
       // TODO: For create successful, 201 Created should be returned instead of 200.
       responder.sendStatus(HttpResponseStatus.OK);
     } catch (IllegalArgumentException e) {
-      responder.sendString(HttpResponseStatus.BAD_REQUEST,
-                           e.getMessage());
+      LOG.error("Failed to create stream {}", stream, e);
+      responder.sendString(HttpResponseStatus.BAD_REQUEST, e.getMessage());
+    } catch (NotFoundException e) {
+      LOG.error("Failed to create stream {}", stream, e);
+      responder.sendString(HttpResponseStatus.BAD_REQUEST, e.getMessage());
     }
   }
 

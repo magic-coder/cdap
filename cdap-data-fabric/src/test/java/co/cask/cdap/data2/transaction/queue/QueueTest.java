@@ -27,7 +27,6 @@ import co.cask.cdap.data2.queue.QueueConsumer;
 import co.cask.cdap.data2.queue.QueueEntry;
 import co.cask.cdap.data2.queue.QueueProducer;
 import co.cask.cdap.data2.transaction.stream.StreamAdmin;
-import co.cask.cdap.proto.Id;
 import co.cask.cdap.test.SlowTests;
 import co.cask.tephra.Transaction;
 import co.cask.tephra.TransactionAware;
@@ -155,7 +154,7 @@ public abstract class QueueTest {
                      }
                    });
     // drop all queues
-    streamAdmin.dropAllInNamespace(Id.Namespace.from(Constants.DEFAULT_NAMESPACE));
+    streamAdmin.dropAllInNamespace(Constants.DEFAULT_NAMESPACE_ID);
     // verify that queue is gone and stream is still there
     final QueueConsumer qConsumer = queueClientFactory.createConsumer(
       queueName, new ConsumerConfig(0, 0, 1, DequeueStrategy.FIFO, null), 1);

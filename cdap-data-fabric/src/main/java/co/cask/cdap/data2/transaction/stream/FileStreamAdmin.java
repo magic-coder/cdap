@@ -266,6 +266,7 @@ public class FileStreamAdmin implements StreamAdmin {
 
   @Override
   public void create(final Id.Stream streamId, @Nullable final Properties props) throws Exception {
+    ensureNamespaceHomeExists(streamId.getNamespace());
     final Location streamLocation = getStreamBaseLocation(streamId);
     Locations.mkdirsIfNotExists(streamLocation);
 
@@ -294,6 +295,13 @@ public class FileStreamAdmin implements StreamAdmin {
         return config;
       }
     });
+  }
+
+  private void ensureNamespaceHomeExists(Id.Namespace namespaceId) throws IOException {
+    Location namespaceHomeLocation = Locations.getParent(getStreamsHomeLocation(namespaceId));
+    Preconditions.checkArgument(namespaceHomeLocation.exists(),
+                                String.format("Home directory %s for namespace %s not found",
+                                              namespaceHomeLocation.toURI().getPath(), namespaceId.getId()));
   }
 
   /**

@@ -23,7 +23,9 @@ import co.cask.cdap.app.store.StoreFactory;
 import co.cask.cdap.common.conf.CConfiguration;
 import co.cask.cdap.common.conf.Constants;
 import co.cask.cdap.common.exception.ApplicationNotFoundException;
+import co.cask.cdap.common.exception.BadRequestException;
 import co.cask.cdap.common.exception.NamespaceNotFoundException;
+import co.cask.cdap.common.exception.ProgramNotFoundException;
 import co.cask.cdap.common.http.RESTMigrationUtils;
 import co.cask.cdap.config.ConsoleSettingsStore;
 import co.cask.cdap.config.PreferencesStore;
@@ -34,20 +36,16 @@ import co.cask.cdap.data2.transaction.queue.QueueAdmin;
 import co.cask.cdap.data2.transaction.stream.StreamAdmin;
 import co.cask.cdap.gateway.auth.Authenticator;
 import co.cask.cdap.gateway.handlers.util.AbstractAppFabricHttpHandler;
-import co.cask.cdap.internal.UserErrors;
-import co.cask.cdap.internal.UserMessages;
 import co.cask.cdap.internal.app.AppLifecycleService;
 import co.cask.cdap.internal.app.runtime.ProgramOptionConstants;
 import co.cask.cdap.proto.Id;
 import co.cask.cdap.proto.Instances;
-import co.cask.cdap.proto.ProgramStatus;
 import co.cask.cdap.proto.ProgramType;
 import co.cask.http.BodyConsumer;
 import co.cask.http.HttpResponder;
 import co.cask.tephra.TransactionSystemClient;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableMap;
-import com.google.gson.JsonObject;
 import com.google.inject.Inject;
 import org.jboss.netty.handler.codec.http.HttpRequest;
 import org.jboss.netty.handler.codec.http.HttpResponseStatus;
@@ -160,7 +158,6 @@ public class AppFabricHttpHandler extends AbstractAppFabricHttpHandler {
   @Path("/transactions/state")
   @GET
   public void getTxManagerSnapshot(HttpRequest request, HttpResponder responder) {
-
     transactionHttpHandler.getTxManagerSnapshot(RESTMigrationUtils.rewriteV2RequestToV3WithoutNamespace(request),
                                                 responder);
   }
@@ -171,9 +168,7 @@ public class AppFabricHttpHandler extends AbstractAppFabricHttpHandler {
    */
   @Path("/transactions/{tx-id}/invalidate")
   @POST
-  public void invalidateTx(HttpRequest request, HttpResponder responder,
-                           @PathParam("tx-id") String txId) {
-
+  public void invalidateTx(HttpRequest request, HttpResponder responder, @PathParam("tx-id") String txId) {
     transactionHttpHandler.invalidateTx(RESTMigrationUtils.rewriteV2RequestToV3WithoutNamespace(request),
                                         responder, txId);
   }
@@ -232,38 +227,14 @@ public class AppFabricHttpHandler extends AbstractAppFabricHttpHandler {
   @GET
   @Path("/apps/{app-id}/webapp/status")
   public void webappStatus(final HttpRequest request, final HttpResponder responder,
-                           @PathParam("app-id") final String appId) {
-    try {
-      String accountId = getAuthenticatedAccountId(request);
-      Id.Program id = Id.Program.from(accountId, appId, ProgramType.WEBAPP,
-                                      ProgramType.WEBAPP.getPrettyName().toLowerCase());
-      programStatus(responder, id, ProgramType.WEBAPP);
-    } catch (SecurityException e) {
-      responder.sendStatus(HttpResponseStatus.UNAUTHORIZED);
-    } catch (Throwable t) {
-      LOG.error("Got exception:", t);
-      responder.sendStatus(HttpResponseStatus.INTERNAL_SERVER_ERROR);
-    }
-  }
+                           @PathParam("app-id") final String appId)
+    throws ApplicationNotFoundException, IOException, ProgramNotFoundException {
 
-  private void programStatus(HttpResponder responder, Id.Program id, ProgramType type) {
-    try {
-      ProgramStatus status = programLifecycleHttpHandler.getProgramStatus(id, type);
-      if (status.getStatus().equals(HttpResponseStatus.NOT_FOUND.toString())) {
-        responder.sendStatus(HttpResponseStatus.NOT_FOUND);
-      } else {
-        JsonObject reply = new JsonObject();
-        reply.addProperty("status", status.getStatus());
-        responder.sendJson(HttpResponseStatus.OK, reply);
-      }
-    } catch (SecurityException e) {
-      responder.sendStatus(HttpResponseStatus.UNAUTHORIZED);
-    } catch (Throwable e) {
-      LOG.error("Got exception:", e);
-      responder.sendStatus(HttpResponseStatus.INTERNAL_SERVER_ERROR);
-    }
+    String accountId = getAuthenticatedAccountId(request);
+    Id.Program id = Id.Program.from(accountId, appId, ProgramType.WEBAPP,
+                                    ProgramType.WEBAPP.getPrettyName().toLowerCase());
+    responder.sendJson(HttpResponseStatus.OK, programLifecycleHttpHandler.getProgramStatus(id, ProgramType.WEBAPP));
   }
-
 
   /**
    * Starts a program.
@@ -378,24 +349,17 @@ public class AppFabricHttpHandler extends AbstractAppFabricHttpHandler {
   @Path("/apps/{app-id}/procedures/{procedure-id}/instances")
   public void getProcedureInstances(HttpRequest request, HttpResponder responder,
                                     @PathParam("app-id") final String appId,
-                                    @PathParam("procedure-id") final String procedureId) {
-    try {
-      String accountId = getAuthenticatedAccountId(request);
-      Id.Program programId = Id.Program.from(accountId, appId, ProgramType.PROCEDURE, procedureId);
+                                    @PathParam("procedure-id") final String procedureId) throws Exception {
+    String accountId = getAuthenticatedAccountId(request);
+    Id.Program programId = Id.Program.from(accountId, appId, ProgramType.PROCEDURE, procedureId);
 
-      if (!store.programExists(programId, ProgramType.PROCEDURE)) {
-        responder.sendString(HttpResponseStatus.NOT_FOUND, "Program not found");
-        return;
-      }
-
-      int count = getProcedureInstances(programId);
-      responder.sendJson(HttpResponseStatus.OK, new Instances(count));
-    } catch (SecurityException e) {
-      responder.sendStatus(HttpResponseStatus.UNAUTHORIZED);
-    } catch (Throwable throwable) {
-      LOG.error("Got exception : ", throwable);
-      responder.sendStatus(HttpResponseStatus.INTERNAL_SERVER_ERROR);
+    if (!store.programExists(programId, ProgramType.PROCEDURE)) {
+      responder.sendString(HttpResponseStatus.NOT_FOUND, "Program not found");
+      return;
     }
+
+    int count = getProcedureInstances(programId);
+    responder.sendJson(HttpResponseStatus.OK, new Instances(count));
   }
 
   /**
@@ -405,30 +369,24 @@ public class AppFabricHttpHandler extends AbstractAppFabricHttpHandler {
   @Path("/apps/{app-id}/procedures/{procedure-id}/instances")
   public void setProcedureInstances(HttpRequest request, HttpResponder responder,
                                     @PathParam("app-id") final String appId,
-                                    @PathParam("procedure-id") final String procedureId) {
-    try {
-      String accountId = getAuthenticatedAccountId(request);
-      Id.Program programId = Id.Program.from(accountId, appId, ProgramType.PROCEDURE, procedureId);
+                                    @PathParam("procedure-id") final String procedureId) throws Exception {
 
-      if (!store.programExists(programId, ProgramType.PROCEDURE)) {
-        responder.sendString(HttpResponseStatus.NOT_FOUND, "Program not found");
-        return;
-      }
+    String accountId = getAuthenticatedAccountId(request);
+    Id.Program programId = Id.Program.from(accountId, appId, ProgramType.PROCEDURE, procedureId);
 
-      int instances = getInstances(request);
-      if (instances < 1) {
-        responder.sendString(HttpResponseStatus.BAD_REQUEST, "Instance count should be greater than 0");
-        return;
-      }
-
-      setProcedureInstances(programId, instances);
-      responder.sendStatus(HttpResponseStatus.OK);
-    } catch (SecurityException e) {
-      responder.sendStatus(HttpResponseStatus.UNAUTHORIZED);
-    } catch (Throwable throwable) {
-      LOG.error("Got exception : ", throwable);
-      responder.sendStatus(HttpResponseStatus.INTERNAL_SERVER_ERROR);
+    if (!store.programExists(programId, ProgramType.PROCEDURE)) {
+      responder.sendString(HttpResponseStatus.NOT_FOUND, "Program not found");
+      return;
     }
+
+    int instances = getInstances(request);
+    if (instances < 1) {
+      responder.sendString(HttpResponseStatus.BAD_REQUEST, "Instance count should be greater than 0");
+      return;
+    }
+
+    setProcedureInstances(programId, instances);
+    responder.sendStatus(HttpResponseStatus.OK);
   }
 
   /**
@@ -1041,62 +999,53 @@ public class AppFabricHttpHandler extends AbstractAppFabricHttpHandler {
    */
   @POST
   @Path("/unrecoverable/reset")
-  public void resetCDAP(HttpRequest request, HttpResponder responder) {
-
-    try {
-      if (!configuration.getBoolean(Constants.Dangerous.UNRECOVERABLE_RESET,
-                                    Constants.Dangerous.DEFAULT_UNRECOVERABLE_RESET)) {
-        responder.sendStatus(HttpResponseStatus.FORBIDDEN);
-        return;
-      }
-      String account = getAuthenticatedAccountId(request);
-      final Id.Namespace namespace = Id.Namespace.from(account);
-      if (store.getNamespace(namespace) == null) {
-        responder.sendStatus(HttpResponseStatus.OK);
-        LOG.info("Skipping delete because namespace '" + namespace.getId() + "' doesn't exist.");
-        return;
-      }
-
-      // Check if any program is still running
-      boolean appRunning = appLifecycleService.checkAnyRunning(new Predicate<Id.Program>() {
-        @Override
-        public boolean apply(Id.Program programId) {
-          return programId.getNamespaceId().equals(namespace.getId());
-        }
-      }, ProgramType.values());
-
-      if (appRunning) {
-        throw new Exception("Cannot reset while programs are running");
-      }
-
-      LOG.info("Deleting all data for account '" + account + "'.");
-
-      // remove preferences stored at instance level
-      preferencesStore.deleteProperties();
-
-      // remove all data in consolesettings
-      consoleSettingsStore.delete();
-
-      dsFramework.deleteAllInstances(namespace);
-      dsFramework.deleteAllModules(namespace);
-
-      // todo: do efficiently and also remove timeseries metrics as well: CDAP-1125
-      appLifecycleService.deleteMetrics(account, null);
-      // delete all meta data
-      store.removeAll(namespace);
-      // delete queues and streams data
-      queueAdmin.dropAllInNamespace(namespace.getId());
-      streamAdmin.dropAllInNamespace(namespace);
-
-      LOG.info("All data for account '" + account + "' deleted.");
-      responder.sendStatus(HttpResponseStatus.OK);
-    } catch (SecurityException e) {
-      responder.sendStatus(HttpResponseStatus.UNAUTHORIZED);
-    } catch (Throwable e) {
-      LOG.warn(e.getMessage(), e);
-      responder.sendString(HttpResponseStatus.BAD_REQUEST,
-                           String.format(UserMessages.getMessage(UserErrors.RESET_FAIL), e.getMessage()));
+  public void resetCDAP(HttpRequest request, HttpResponder responder) throws Exception {
+    if (!configuration.getBoolean(Constants.Dangerous.UNRECOVERABLE_RESET,
+                                  Constants.Dangerous.DEFAULT_UNRECOVERABLE_RESET)) {
+      responder.sendStatus(HttpResponseStatus.FORBIDDEN);
+      return;
     }
+
+    final Id.Namespace namespace = Constants.DEFAULT_NAMESPACE_ID;
+    if (store.getNamespace(namespace) == null) {
+      responder.sendStatus(HttpResponseStatus.OK);
+      LOG.info("Skipping delete because namespace '" + namespace.getId() + "' doesn't exist.");
+      return;
+    }
+
+    // Check if any program is still running
+    boolean appRunning = appLifecycleService.checkAnyRunning(new Predicate<Id.Program>() {
+      @Override
+      public boolean apply(Id.Program programId) {
+        return programId.getNamespaceId().equals(namespace.getId());
+      }
+    }, ProgramType.values());
+
+    if (appRunning) {
+      throw new BadRequestException("Cannot reset while programs are running");
+    }
+
+    LOG.info("Deleting all data for namespace '" + namespace.getId() + "'.");
+
+    // remove preferences stored at instance level
+    preferencesStore.deleteProperties();
+
+    // remove all data in consolesettings
+    consoleSettingsStore.delete();
+
+    dsFramework.deleteAllInstances(namespace);
+    dsFramework.deleteAllModules(namespace);
+
+    // todo: do efficiently and also remove timeseries metrics as well: CDAP-1125
+    appLifecycleService.deleteMetrics(namespace);
+    // delete all meta data
+    store.removeAll(namespace);
+    // delete queues and streams data
+    queueAdmin.dropAllInNamespace(namespace.getId());
+    streamAdmin.dropAllInNamespace(namespace);
+
+    LOG.info("All data for account '" + namespace.getId() + "' deleted.");
+    responder.sendStatus(HttpResponseStatus.OK);
   }
 
   /**
@@ -1104,41 +1053,32 @@ public class AppFabricHttpHandler extends AbstractAppFabricHttpHandler {
    */
   @DELETE
   @Path("/unrecoverable/data/datasets")
-  public void deleteDatasets(HttpRequest request, HttpResponder responder) {
-
-    try {
-      if (!configuration.getBoolean(Constants.Dangerous.UNRECOVERABLE_RESET,
-                                    Constants.Dangerous.DEFAULT_UNRECOVERABLE_RESET)) {
-        responder.sendStatus(HttpResponseStatus.FORBIDDEN);
-        return;
-      }
-      String account = getAuthenticatedAccountId(request);
-      final Id.Namespace namespaceId = Id.Namespace.from(account);
-
-      // Check if any program is still running
-      boolean appRunning = appLifecycleService.checkAnyRunning(new Predicate<Id.Program>() {
-        @Override
-        public boolean apply(Id.Program programId) {
-          return programId.getNamespaceId().equals(namespaceId.getId());
-        }
-      }, ProgramType.values());
-
-      if (appRunning) {
-        throw new Exception("Cannot delete all datasets while programs are running");
-      }
-
-      LOG.info("Deleting all datasets for account '" + account + "'.");
-
-      dsFramework.deleteAllInstances(namespaceId);
-
-      LOG.info("All datasets for account '" + account + "' deleted.");
-      responder.sendStatus(HttpResponseStatus.OK);
-    } catch (SecurityException e) {
-      responder.sendStatus(HttpResponseStatus.UNAUTHORIZED);
-    } catch (Throwable e) {
-      LOG.warn(e.getMessage(), e);
-      responder.sendString(HttpResponseStatus.BAD_REQUEST,
-                           String.format(UserMessages.getMessage(UserErrors.DATASETS_DELETE_FAIL), e.getMessage()));
+  public void deleteDatasets(HttpRequest request, HttpResponder responder) throws Exception {
+    if (!configuration.getBoolean(Constants.Dangerous.UNRECOVERABLE_RESET,
+                                  Constants.Dangerous.DEFAULT_UNRECOVERABLE_RESET)) {
+      responder.sendStatus(HttpResponseStatus.FORBIDDEN);
+      return;
     }
+    String account = getAuthenticatedAccountId(request);
+    final Id.Namespace namespaceId = Id.Namespace.from(account);
+
+    // Check if any program is still running
+    boolean appRunning = appLifecycleService.checkAnyRunning(new Predicate<Id.Program>() {
+      @Override
+      public boolean apply(Id.Program programId) {
+        return programId.getNamespaceId().equals(namespaceId.getId());
+      }
+    }, ProgramType.values());
+
+    if (appRunning) {
+      throw new Exception("Cannot delete all datasets while programs are running");
+    }
+
+    LOG.info("Deleting all datasets for account '" + account + "'.");
+
+    dsFramework.deleteAllInstances(namespaceId);
+
+    LOG.info("All datasets for account '" + account + "' deleted.");
+    responder.sendStatus(HttpResponseStatus.OK);
   }
 }

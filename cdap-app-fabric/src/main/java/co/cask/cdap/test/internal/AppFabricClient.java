@@ -79,7 +79,7 @@ public class AppFabricClient {
     this.locationFactory = locationFactory;
   }
 
-  public void reset() {
+  public void reset() throws Exception {
     MockResponder responder = new MockResponder();
     String uri = String.format("/v2/unrecoverable/reset");
     HttpRequest request = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.PUT, uri);

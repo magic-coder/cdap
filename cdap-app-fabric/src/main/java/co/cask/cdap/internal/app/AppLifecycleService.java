@@ -34,7 +34,6 @@ import co.cask.cdap.app.store.Store;
 import co.cask.cdap.app.store.StoreFactory;
 import co.cask.cdap.common.conf.CConfiguration;
 import co.cask.cdap.common.conf.Constants;
-import co.cask.cdap.common.discovery.RandomEndpointStrategy;
 import co.cask.cdap.common.exception.ApplicationNotFoundException;
 import co.cask.cdap.common.exception.NamespaceNotFoundException;
 import co.cask.cdap.config.PreferencesStore;
@@ -62,9 +61,7 @@ import com.google.common.collect.Multimap;
 import com.google.inject.Inject;
 import com.ning.http.client.SimpleAsyncHttpClient;
 import org.apache.twill.api.RunId;
-import org.apache.twill.discovery.Discoverable;
 import org.apache.twill.discovery.DiscoveryServiceClient;
-import org.apache.twill.discovery.ServiceDiscovered;
 import org.apache.twill.filesystem.Location;
 import org.apache.twill.filesystem.LocationFactory;
 import org.slf4j.Logger;
@@ -72,6 +69,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -105,6 +103,7 @@ public class AppLifecycleService {
   private final CConfiguration configuration;
   private final LocationFactory locationFactory;
   private final PreferencesStore preferencesStore;
+  private final ServiceLocator serviceLocator;
 
   @Inject
   public AppLifecycleService(Scheduler scheduler, StoreFactory storeFactory,
@@ -112,7 +111,7 @@ public class AppLifecycleService {
                              ProgramRuntimeService programService, StreamConsumerFactory streamConsumerFactory,
                              QueueAdmin queueAdmin, DiscoveryServiceClient discoveryServiceClient,
                              CConfiguration configuration, LocationFactory locationFactory,
-                             PreferencesStore preferencesStore) {
+                             PreferencesStore preferencesStore, ServiceLocator serviceLocator) {
     this.scheduler = scheduler;
     this.store = storeFactory.create();
     this.managerFactory = managerFactory;
@@ -123,6 +122,7 @@ public class AppLifecycleService {
     this.configuration = configuration;
     this.locationFactory = locationFactory;
     this.preferencesStore = preferencesStore;
+    this.serviceLocator = serviceLocator;
   }
 
   public ApplicationSpecification getApp(Id.Application appId) throws ApplicationNotFoundException {
@@ -306,7 +306,7 @@ public class AppLifecycleService {
       scheduler.deleteSchedules(workflowProgramId, SchedulableProgramType.WORKFLOW);
     }
 
-    deleteMetrics(appId.getNamespaceId(), appId.getId());
+    deleteMetrics(appId);
 
     //Delete all preferences of the application and of all its programs
     deletePreferences(appId);
@@ -342,9 +342,9 @@ public class AppLifecycleService {
     return AbstractAppFabricHttpHandler.AppFabricServiceStatus.OK;
   }
 
-  public void sendMetricsDelete(String url) {
+  public void sendMetricsDelete(URI uri) {
     SimpleAsyncHttpClient client = new SimpleAsyncHttpClient.Builder()
-      .setUrl(url)
+      .setUrl(uri.toString())
       .setRequestTimeoutInMs((int) METRICS_SERVER_RESPONSE_TIMEOUT)
       .build();
 
@@ -442,46 +442,24 @@ public class AppLifecycleService {
     return false;
   }
 
-  /**
-   * Temporarily protected only to support v2 APIs. Currently used in unrecoverable/reset. Should become private once
-   * the reset API has a v3 version
-   */
-  public void deleteMetrics(String namespaceId, String applicationId)
+  public void deleteMetrics(Id.Application application)
     throws IOException, NamespaceNotFoundException, ApplicationNotFoundException {
 
-    Id.Namespace namespace = new Id.Namespace(namespaceId);
-    Collection<ApplicationSpecification> applications = Lists.newArrayList();
-    if (applicationId == null) {
-      applications = this.store.getAllApplications(namespace);
-    } else {
-      ApplicationSpecification spec = this.store.getApplication(new Id.Application(namespace, applicationId));
-      applications.add(spec);
-    }
-    ServiceDiscovered discovered = discoveryServiceClient.discover(Constants.Service.METRICS);
-    Discoverable discoverable = new RandomEndpointStrategy(discovered).pick(DISCOVERY_TIMEOUT_SECONDS,
-                                                                            TimeUnit.SECONDS);
-
-    if (discoverable == null) {
-      LOG.error("Fail to get any metrics endpoint for deleting metrics.");
-      throw new IOException("Can't find Metrics endpoint");
-    }
-
-    for (ApplicationSpecification application : applications) {
-      String url = String.format("http://%s:%d%s/metrics/%s/apps/%s",
-                                 discoverable.getSocketAddress().getHostName(),
-                                 discoverable.getSocketAddress().getPort(),
-                                 Constants.Gateway.API_VERSION_2,
-                                 "ignored",
-                                 application.getName());
-      sendMetricsDelete(url);
-    }
-
-    if (applicationId == null) {
-      String url = String.format("http://%s:%d%s/metrics", discoverable.getSocketAddress().getHostName(),
-                                 discoverable.getSocketAddress().getPort(), Constants.Gateway.API_VERSION_2);
-      sendMetricsDelete(url);
-    }
+    URI metricsUri = serviceLocator.locate(Constants.Service.METRICS);
+    ApplicationSpecification spec = this.store.getApplication(application);
+    String path = String.format("%s/metrics/%s/apps/%s", Constants.Gateway.API_VERSION_2, "ignored", spec.getName());
+    sendMetricsDelete(metricsUri.resolve(path));
   }
 
+  public void deleteMetrics(Id.Namespace namespace) throws IOException, NamespaceNotFoundException {
+    Collection<ApplicationSpecification> applications = this.store.getAllApplications(namespace);
+    URI metricsUri = serviceLocator.locate(Constants.Service.METRICS);
+    for (ApplicationSpecification app : applications) {
+      String path = String.format("%s/metrcs/%s/apps/%s", Constants.Gateway.API_VERSION_2, "ignored", app.getName());
+      sendMetricsDelete(metricsUri.resolve(path));
+    }
 
+    String path = String.format("%s/metrics", Constants.Gateway.API_VERSION_2);
+    sendMetricsDelete(metricsUri.resolve(path));
+  }
 }

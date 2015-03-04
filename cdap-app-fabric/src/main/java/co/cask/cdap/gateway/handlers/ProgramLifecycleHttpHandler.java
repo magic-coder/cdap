@@ -37,6 +37,7 @@ import co.cask.cdap.common.conf.Constants;
 import co.cask.cdap.common.discovery.RandomEndpointStrategy;
 import co.cask.cdap.common.exception.ApplicationNotFoundException;
 import co.cask.cdap.common.exception.NotFoundException;
+import co.cask.cdap.common.exception.ProgramNotFoundException;
 import co.cask.cdap.config.PreferencesStore;
 import co.cask.cdap.data2.transaction.queue.QueueAdmin;
 import co.cask.cdap.data2.transaction.stream.StreamAdmin;
@@ -1427,15 +1428,14 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
     }
   }
 
-  private StatusMap getProgramStatus(Id.Program id, ProgramType type, StatusMap statusMap) {
-    // getProgramStatus returns program status or http response status NOT_FOUND
-    String progStatus = getProgramStatus(id, type).getStatus();
-    if (progStatus.equals(HttpResponseStatus.NOT_FOUND.toString())) {
-      statusMap.setStatusCode(HttpResponseStatus.NOT_FOUND.getCode());
-      statusMap.setError("Program not found");
-    } else {
+  protected StatusMap getProgramStatus(Id.Program id, ProgramType type, StatusMap statusMap) throws IOException {
+    try {
+      String progStatus = getProgramStatus(id, type).getStatus();
       statusMap.setStatus(progStatus);
       statusMap.setStatusCode(HttpResponseStatus.OK.getCode());
+    } catch (NotFoundException e) {
+      statusMap.setStatusCode(HttpResponseStatus.NOT_FOUND.getCode());
+      statusMap.setError("Program not found");
     }
     return statusMap;
   }
@@ -1443,46 +1443,43 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
   /**
    * 'protected' only to support v2 webapp APIs
    */
-  protected ProgramStatus getProgramStatus(Id.Program id, ProgramType type) {
-    try {
-      ProgramRuntimeService.RuntimeInfo runtimeInfo = findRuntimeInfo(id, type);
+  protected ProgramStatus getProgramStatus(Id.Program id, ProgramType type)
+    throws ApplicationNotFoundException, ProgramNotFoundException, IOException {
 
-      if (runtimeInfo == null) {
-        if (type != ProgramType.WEBAPP) {
-          //Runtime info not found. Check to see if the program exists.
-          ProgramSpecification spec = getProgramSpecification(id, type);
-          if (spec == null) {
-            // program doesn't exist
-            return new ProgramStatus(id.getApplicationId(), id.getId(), HttpResponseStatus.NOT_FOUND.toString());
-          } else {
-            // program exists and not running. so return stopped.
-            return new ProgramStatus(id.getApplicationId(), id.getId(), ProgramController.State.STOPPED.toString());
-          }
+    ProgramRuntimeService.RuntimeInfo runtimeInfo = findRuntimeInfo(id, type);
+
+    if (runtimeInfo == null) {
+      if (type != ProgramType.WEBAPP) {
+        //Runtime info not found. Check to see if the program exists.
+        ProgramSpecification spec = getProgramSpecification(id, type);
+        if (spec == null) {
+          // program doesn't exist
+          throw new ProgramNotFoundException(id);
         } else {
-          // TODO: Fetching webapp status is a hack. This will be fixed when webapp spec is added.
-          Location webappLoc = null;
-          try {
-            webappLoc = Programs.programLocation(locationFactory, appFabricDir, id, ProgramType.WEBAPP);
-          } catch (FileNotFoundException e) {
-            // No location found for webapp, no need to log this exception
-          }
+          // program exists and not running. so return stopped.
+          return new ProgramStatus(id.getApplicationId(), id.getId(), ProgramController.State.STOPPED.toString());
+        }
+      } else {
+        // TODO: Fetching webapp status is a hack. This will be fixed when webapp spec is added.
+        Location webappLoc = null;
+        try {
+          webappLoc = Programs.programLocation(locationFactory, appFabricDir, id, ProgramType.WEBAPP);
+        } catch (FileNotFoundException e) {
+          // No location found for webapp, no need to log this exception
+        }
 
-          if (webappLoc != null && webappLoc.exists()) {
-            // webapp exists and not running. so return stopped.
-            return new ProgramStatus(id.getApplicationId(), id.getId(), ProgramController.State.STOPPED.toString());
-          } else {
-            // webapp doesn't exist
-            return new ProgramStatus(id.getApplicationId(), id.getId(), HttpResponseStatus.NOT_FOUND.toString());
-          }
+        if (webappLoc != null && webappLoc.exists()) {
+          // webapp exists and not running. so return stopped.
+          return new ProgramStatus(id.getApplicationId(), id.getId(), ProgramController.State.STOPPED.toString());
+        } else {
+          // webapp doesn't exist
+          throw new ProgramNotFoundException(id);
         }
       }
-
-      String status = controllerStateToString(runtimeInfo.getController().getState());
-      return new ProgramStatus(id.getApplicationId(), id.getId(), status);
-    } catch (Throwable throwable) {
-      LOG.warn(throwable.getMessage(), throwable);
-      throw Throwables.propagate(throwable);
     }
+
+    String status = controllerStateToString(runtimeInfo.getController().getState());
+    return new ProgramStatus(id.getApplicationId(), id.getId(), status);
   }
 
   /**
@@ -1517,38 +1514,34 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
   }
 
   @Nullable
-  private ProgramSpecification getProgramSpecification(Id.Program id, ProgramType type) throws Exception {
-    ApplicationSpecification appSpec;
-    try {
-      appSpec = store.getApplication(id.getApplication());
-      if (appSpec == null) {
-        return null;
-      }
+  private ProgramSpecification getProgramSpecification(Id.Program id, ProgramType type)
+    throws ApplicationNotFoundException {
 
-      String programId = id.getId();
-      ProgramSpecification programSpec;
-      if (type == ProgramType.FLOW && appSpec.getFlows().containsKey(programId)) {
-        programSpec = appSpec.getFlows().get(id.getId());
-      } else if (type == ProgramType.PROCEDURE && appSpec.getProcedures().containsKey(programId)) {
-        programSpec = appSpec.getProcedures().get(id.getId());
-      } else if (type == ProgramType.MAPREDUCE && appSpec.getMapReduce().containsKey(programId)) {
-        programSpec = appSpec.getMapReduce().get(id.getId());
-      } else if (type == ProgramType.SPARK && appSpec.getSpark().containsKey(programId)) {
-        programSpec = appSpec.getSpark().get(id.getId());
-      } else if (type == ProgramType.WORKFLOW && appSpec.getWorkflows().containsKey(programId)) {
-        programSpec = appSpec.getWorkflows().get(id.getId());
-      } else if (type == ProgramType.SERVICE && appSpec.getServices().containsKey(programId)) {
-        programSpec = appSpec.getServices().get(id.getId());
-      } else if (type == ProgramType.WORKER && appSpec.getWorkers().containsKey(programId)) {
-        programSpec = appSpec.getWorkers().get(id.getId());
-      } else {
-        programSpec = null;
-      }
-      return programSpec;
-    } catch (Throwable throwable) {
-      LOG.warn(throwable.getMessage(), throwable);
-      throw new Exception(throwable.getMessage());
+    ApplicationSpecification appSpec = store.getApplication(id.getApplication());
+    if (appSpec == null) {
+      return null;
     }
+
+    String programId = id.getId();
+    ProgramSpecification programSpec;
+    if (type == ProgramType.FLOW && appSpec.getFlows().containsKey(programId)) {
+      programSpec = appSpec.getFlows().get(id.getId());
+    } else if (type == ProgramType.PROCEDURE && appSpec.getProcedures().containsKey(programId)) {
+      programSpec = appSpec.getProcedures().get(id.getId());
+    } else if (type == ProgramType.MAPREDUCE && appSpec.getMapReduce().containsKey(programId)) {
+      programSpec = appSpec.getMapReduce().get(id.getId());
+    } else if (type == ProgramType.SPARK && appSpec.getSpark().containsKey(programId)) {
+      programSpec = appSpec.getSpark().get(id.getId());
+    } else if (type == ProgramType.WORKFLOW && appSpec.getWorkflows().containsKey(programId)) {
+      programSpec = appSpec.getWorkflows().get(id.getId());
+    } else if (type == ProgramType.SERVICE && appSpec.getServices().containsKey(programId)) {
+      programSpec = appSpec.getServices().get(id.getId());
+    } else if (type == ProgramType.WORKER && appSpec.getWorkers().containsKey(programId)) {
+      programSpec = appSpec.getWorkers().get(id.getId());
+    } else {
+      programSpec = null;
+    }
+    return programSpec;
   }
 
   /** NOTE: This was a temporary hack done to map the status to something that is

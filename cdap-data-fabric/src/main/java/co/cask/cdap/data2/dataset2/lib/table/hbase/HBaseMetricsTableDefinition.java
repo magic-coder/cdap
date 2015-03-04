@@ -43,7 +43,7 @@ public class HBaseMetricsTableDefinition extends AbstractDatasetDefinition<Metri
   @Inject
   private LocationFactory locationFactory;
   @Inject
-  private CConfiguration conf;
+  private CConfiguration cConf;
 
   public HBaseMetricsTableDefinition(String name) {
     super(name);
@@ -51,12 +51,12 @@ public class HBaseMetricsTableDefinition extends AbstractDatasetDefinition<Metri
 
   // for unit-test purposes only
   HBaseMetricsTableDefinition(String name, Configuration hConf, HBaseTableUtil hBaseTableUtil,
-                                     LocationFactory locationFactory, CConfiguration conf) {
+                                     LocationFactory locationFactory, CConfiguration cConf) {
     super(name);
     this.hConf = hConf;
     this.hBaseTableUtil = hBaseTableUtil;
     this.locationFactory = locationFactory;
-    this.conf = conf;
+    this.cConf = cConf;
   }
 
   @Override
@@ -71,11 +71,11 @@ public class HBaseMetricsTableDefinition extends AbstractDatasetDefinition<Metri
   @Override
   public MetricsTable getDataset(DatasetSpecification spec, Map<String, String> arguments, ClassLoader classLoader)
     throws IOException {
-    return new HBaseMetricsTable(spec.getName(), hConf);
+    return new HBaseMetricsTable(spec.getName(), hConf, cConf);
   }
 
   @Override
   public DatasetAdmin getAdmin(DatasetSpecification spec, ClassLoader classLoader) throws IOException {
-    return new HBaseTableAdmin(spec, hConf, hBaseTableUtil, conf, locationFactory);
+    return new HBaseTableAdmin(spec, hConf, hBaseTableUtil, cConf, locationFactory);
   }
 }

@@ -17,6 +17,7 @@
 package co.cask.cdap.data2.util.hbase;
 
 import co.cask.cdap.api.common.Bytes;
+import co.cask.cdap.common.conf.CConfiguration;
 import co.cask.cdap.data2.transaction.queue.hbase.HBaseQueueAdmin;
 import co.cask.cdap.hbase.wd.AbstractRowKeyDistributor;
 import co.cask.cdap.proto.Id;
@@ -64,6 +65,7 @@ import javax.annotation.Nullable;
  * Common utilities for dealing with HBase.
  */
 public abstract class HBaseTableUtil {
+
   /**
    * Represents the compression types supported for HBase tables.
    */
@@ -88,6 +90,13 @@ public abstract class HBaseTableUtil {
   private static final int COPY_BUFFER_SIZE = 0x1000;    // 4K
   private static final CompressionType DEFAULT_COMPRESSION_TYPE = CompressionType.SNAPPY;
   public static final String CFG_HBASE_TABLE_COMPRESSION = "hbase.table.compression.default";
+
+
+  protected CConfiguration cConf;
+
+  public void setCConf(CConfiguration cConf) {
+    this.cConf = cConf;
+  }
 
   /**
    * Create a hbase table if it does not exist. Deals with race conditions when two clients concurrently attempt to

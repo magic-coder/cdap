@@ -55,7 +55,7 @@ public final class HBaseQueueClientFactory implements QueueClientFactory {
     this.queueAdmin = (HBaseQueueAdmin) queueAdmin;
     this.streamAdmin = streamAdmin;
     this.queueUtil = new HBaseQueueUtilFactory().get();
-    this.hBaseTableUtil = new HBaseTableUtilFactory().get();
+    this.hBaseTableUtil = new HBaseTableUtilFactory().get(cConf);
   }
 
   // for testing only

@@ -131,7 +131,7 @@ public abstract class HBaseQueueTest extends QueueTest {
       });
 
     //create HBase namespace
-    tableUtil = new HBaseTableUtilFactory().get();
+    tableUtil = new HBaseTableUtilFactory().get(cConf);
     tableUtil.createNamespaceIfNotExists(testHBase.getHBaseAdmin(), Constants.SYSTEM_NAMESPACE_ID);
     tableUtil.createNamespaceIfNotExists(testHBase.getHBaseAdmin(), NAMESPACE_ID);
     tableUtil.createNamespaceIfNotExists(testHBase.getHBaseAdmin(), NAMESPACE_ID1);

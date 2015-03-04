@@ -96,7 +96,7 @@ public class HBaseKVTableDefinition extends AbstractDatasetDefinition<NoTxKeyVal
       columnDescriptor.setMaxVersions(1);
       tableUtil.setBloomFilter(columnDescriptor, HBaseTableUtil.BloomType.ROW);
 
-      HTableDescriptor tableDescriptor = tableUtil.getHTableDescriptor(tableId);
+      HTableDescriptor tableDescriptor = tableUtil.createHTableDescriptor(tableId);
       tableDescriptor.addFamily(columnDescriptor);
       tableUtil.createTableIfNotExists(admin, tableId, tableDescriptor);
     }
@@ -109,7 +109,7 @@ public class HBaseKVTableDefinition extends AbstractDatasetDefinition<NoTxKeyVal
 
     @Override
     public void truncate() throws IOException {
-      HTableDescriptor tableDescriptor = tableUtil.getHTableDescriptor(tableId);
+      HTableDescriptor tableDescriptor = tableUtil.createHTableDescriptor(tableId);
       tableUtil.disableTable(admin, tableId);
       tableUtil.deleteTable(admin, tableId);
       tableUtil.createTableIfNotExists(admin, tableId, tableDescriptor);
@@ -134,7 +134,7 @@ public class HBaseKVTableDefinition extends AbstractDatasetDefinition<NoTxKeyVal
 
     public KVTableImpl(String tableName, Configuration hConf, HBaseTableUtil tableUtil) throws IOException {
       this.tableUtil = tableUtil;
-      this.table = this.tableUtil.getHTable(hConf, TableId.from(tableName));
+      this.table = this.tableUtil.createHTable(hConf, TableId.from(tableName));
     }
 
     @Override

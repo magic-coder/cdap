@@ -127,6 +127,9 @@ public enum ProgramType {
   }
 
   public SchedulableProgramType getSchedulableType() {
+    if (parameters.getSchedulableType() == null) {
+      throw new IllegalArgumentException(this + " is not a SchedulableProgramType");
+    }
     return parameters.getSchedulableType();
   }
 
@@ -136,7 +139,7 @@ public enum ProgramType {
 
   public static ProgramType valueOfSchedulableType(SchedulableProgramType schedulableType) {
     for (ProgramType type : ProgramType.values()) {
-      if (schedulableType.equals(type.getSchedulableType())) {
+      if (schedulableType.equals(type.parameters.getSchedulableType())) {
         return type;
       }
     }
@@ -180,6 +183,7 @@ public enum ProgramType {
       this.schedulableType = schedulableType;
     }
 
+    @Nullable
     public SchedulableProgramType getSchedulableType() {
       return schedulableType;
     }

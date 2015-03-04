@@ -471,7 +471,7 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
 
     ProgramType type = getProgramType(programType);
     if (type == null) {
-      responder.sendString(HttpResponseStatus.BAD_REQUEST,
+      responder.sendString(HttpResponseStatus.METHOD_NOT_ALLOWED,
                            String.format("Program type '%s' not supported", programType));
       return;
     }
@@ -966,7 +966,7 @@ public class ProgramLifecycleHttpHandler extends AbstractAppFabricHttpHandler {
                        @PathParam("program-id") String programId) {
     ProgramType type = getProgramType(programCategory);
     if (type == null) {
-      responder.sendString(HttpResponseStatus.BAD_REQUEST,
+      responder.sendString(HttpResponseStatus.METHOD_NOT_ALLOWED,
                            String.format("Live-info not supported for program type '%s'", programCategory));
       return;
     }

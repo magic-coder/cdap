@@ -56,24 +56,41 @@ public final class RuntimeStats implements MetricsConstants {
     metricStore.deleteBefore(System.currentTimeMillis() / 1000);
   }
 
-  public static RuntimeMetrics getMapReduceMetrics(String applicationId, String mapReduceId) {
-    Id.Program id = Id.Program.from(Constants.DEFAULT_NAMESPACE, applicationId, ProgramType.MAPREDUCE, mapReduceId);
+  public static RuntimeMetrics getMapReduceMetrics(String namespace, String applicationId, String mapReduceId) {
+    Id.Program id = Id.Program.from(namespace, applicationId, ProgramType.MAPREDUCE, mapReduceId);
     return getMetrics(MetricsContext.forMapReduce(id), MAPREDUCE_INPUT, MAPREDUCE_PROCESSED, MAPREDUCE_EXCEPTIONS);
   }
 
-  public static RuntimeMetrics getFlowletMetrics(String applicationId, String flowId, String flowletId) {
-    Id.Program id = Id.Program.from(Constants.DEFAULT_NAMESPACE, applicationId, ProgramType.FLOW, flowId);
+  public static RuntimeMetrics getMapReduceMetrics(String applicationId, String mapReduceId) {
+    return getMapReduceMetrics(Constants.DEFAULT_NAMESPACE, applicationId, mapReduceId);
+  }
+
+  public static RuntimeMetrics getFlowletMetrics(String namespace, String applicationId,
+                                                 String flowId, String flowletId) {
+    Id.Program id = Id.Program.from(namespace, applicationId, ProgramType.FLOW, flowId);
     return getMetrics(MetricsContext.forFlowlet(id, flowletId), FLOWLET_INPUT, FLOWLET_PROCESSED, FLOWLET_EXCEPTIONS);
   }
 
-  public static RuntimeMetrics getProcedureMetrics(String applicationId, String procedureId) {
-    Id.Program id = Id.Program.from(Constants.DEFAULT_NAMESPACE, applicationId, ProgramType.PROCEDURE, procedureId);
+  public static RuntimeMetrics getFlowletMetrics(String applicationId, String flowId, String flowletId) {
+    return getFlowletMetrics(Constants.DEFAULT_NAMESPACE, applicationId, flowId, flowletId);
+  }
+
+  public static RuntimeMetrics getProcedureMetrics(String namespace, String applicationId, String procedureId) {
+    Id.Program id = Id.Program.from(namespace, applicationId, ProgramType.PROCEDURE, procedureId);
     return getMetrics(MetricsContext.forProcedure(id), PROCEDURE_INPUT, PROCEDURE_PROCESSED, PROCEDURE_EXCEPTIONS);
   }
 
-  public static RuntimeMetrics getServiceMetrics(String applicationId, String serviceId) {
-    Id.Program id = Id.Program.from(Constants.DEFAULT_NAMESPACE, applicationId, ProgramType.SERVICE, serviceId);
+  public static RuntimeMetrics getProcedureMetrics(String applicationId, String procedureId) {
+    return getProcedureMetrics(Constants.DEFAULT_NAMESPACE, applicationId, procedureId);
+  }
+
+  public static RuntimeMetrics getServiceMetrics(String namespace, String applicationId, String serviceId) {
+    Id.Program id = Id.Program.from(namespace, applicationId, ProgramType.SERVICE, serviceId);
     return getMetrics(MetricsContext.forService(id), SERVICE_INPUT, SERVICE_PROCESSED, SERVICE_EXCEPTIONS);
+  }
+
+  public static RuntimeMetrics getServiceMetrics(String applicationId, String serviceId) {
+    return getServiceMetrics(Constants.DEFAULT_NAMESPACE, applicationId, serviceId);
   }
 
   @Deprecated

@@ -24,15 +24,13 @@ import co.cask.cdap.api.dataset.DatasetProperties;
 import co.cask.cdap.api.dataset.module.DatasetModule;
 import co.cask.cdap.app.ApplicationSpecification;
 import co.cask.cdap.app.DefaultAppConfigurer;
-import co.cask.cdap.client.config.ClientConfig;
-import co.cask.cdap.common.conf.CConfiguration;
 import co.cask.cdap.common.conf.Constants;
 import co.cask.cdap.common.discovery.StickyEndpointStrategy;
 import co.cask.cdap.data2.dataset2.DatasetFramework;
 import co.cask.cdap.explore.jdbc.ExploreDriver;
 import co.cask.cdap.proto.Id;
 import co.cask.cdap.test.internal.AppFabricClient;
-import co.cask.cdap.test.internal.LocalApplicationManager;
+import co.cask.cdap.test.internal.ApplicationManagerFactory;
 import co.cask.tephra.TransactionAware;
 import co.cask.tephra.TransactionContext;
 import co.cask.tephra.TransactionFailureException;
@@ -42,6 +40,7 @@ import com.google.common.base.Throwables;
 import com.google.common.collect.Lists;
 import org.apache.twill.discovery.Discoverable;
 import org.apache.twill.discovery.DiscoveryServiceClient;
+import org.apache.twill.filesystem.Location;
 
 import java.io.File;
 import java.io.IOException;
@@ -59,21 +58,16 @@ public class UnitTestManager implements TestManager {
   private final DatasetFramework datasetFramework;
   private final TransactionSystemClient txSystemClient;
   private final DiscoveryServiceClient discoveryClient;
+  private final ApplicationManagerFactory appManagerFactory;
 
   public UnitTestManager(AppFabricClient appFabricClient, DatasetFramework datasetFramework,
-                         TransactionSystemClient txSystemClient, DiscoveryServiceClient discoveryClient) {
+                         TransactionSystemClient txSystemClient, DiscoveryServiceClient discoveryClient,
+                         ApplicationManagerFactory appManagerFactory) {
     this.appFabricClient = appFabricClient;
     this.datasetFramework = datasetFramework;
     this.txSystemClient = txSystemClient;
     this.discoveryClient = discoveryClient;
-  }
-
-  private ClientConfig getLocalClientConfig() {
-    CConfiguration configuration = CConfiguration.create();
-    return new ClientConfig.Builder()
-      .setHostname(configuration.get(Constants.Router.ADDRESS))
-      .setPort(configuration.getInt(Constants.Router.ROUTER_PORT))
-      .build();
+    this.appManagerFactory = appManagerFactory;
   }
 
   /**
@@ -96,9 +90,9 @@ public class UnitTestManager implements TestManager {
       app.configure(configurer, new ApplicationContext());
       ApplicationSpecification appSpec = configurer.createSpecification();
 
-      appFabricClient.deployApplication(appSpec.getName(), applicationClz, bundleEmbeddedJars);
-      return new LocalApplicationManager(Id.Application.from(namespace, appSpec.getName()),
-                                         getLocalClientConfig(), datasetFramework, txSystemClient);
+      Location deployedJar = appFabricClient.deployApplication(appSpec.getName(), applicationClz, bundleEmbeddedJars);
+      return appManagerFactory.create(Id.Application.from(namespace, appSpec.getName()), deployedJar, appSpec);
+
     } catch (Exception e) {
       throw Throwables.propagate(e);
     }

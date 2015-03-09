@@ -75,6 +75,11 @@ import co.cask.cdap.notifications.feeds.guice.NotificationFeedServiceRuntimeModu
 import co.cask.cdap.notifications.guice.NotificationServiceRuntimeModule;
 import co.cask.cdap.proto.Id;
 import co.cask.cdap.test.internal.AppFabricClient;
+import co.cask.cdap.test.internal.ApplicationManagerFactory;
+import co.cask.cdap.test.internal.DefaultApplicationManager;
+import co.cask.cdap.test.internal.DefaultProcedureClient;
+import co.cask.cdap.test.internal.DefaultStreamWriter;
+import co.cask.cdap.test.internal.StreamWriterFactory;
 import co.cask.tephra.TransactionManager;
 import co.cask.tephra.TransactionSystemClient;
 import com.google.common.base.Preconditions;
@@ -87,6 +92,7 @@ import com.google.inject.Injector;
 import com.google.inject.Module;
 import com.google.inject.Scopes;
 import com.google.inject.Singleton;
+import com.google.inject.assistedinject.FactoryModuleBuilder;
 import com.google.inject.util.Modules;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.twill.discovery.DiscoveryServiceClient;
@@ -229,6 +235,12 @@ public class TestBase {
         @Override
         @SuppressWarnings("deprecation")
         protected void configure() {
+          install(new FactoryModuleBuilder().implement(ApplicationManager.class, DefaultApplicationManager.class)
+                    .build(ApplicationManagerFactory.class));
+          install(new FactoryModuleBuilder().implement(StreamWriter.class, DefaultStreamWriter.class)
+                    .build(StreamWriterFactory.class));
+          install(new FactoryModuleBuilder().implement(ProcedureClient.class, DefaultProcedureClient.class)
+                    .build(co.cask.cdap.test.internal.ProcedureClientFactory.class));
           bind(TemporaryFolder.class).toInstance(tmpFolder);
         }
       }
@@ -258,7 +270,8 @@ public class TestBase {
     txSystemClient = injector.getInstance(TransactionSystemClient.class);
     streamCoordinatorClient = injector.getInstance(StreamCoordinatorClient.class);
     streamCoordinatorClient.startAndWait();
-    testManager = new UnitTestManager(appFabricClient, datasetFramework, txSystemClient, discoveryClient);
+    testManager = new UnitTestManager(appFabricClient, datasetFramework, txSystemClient, discoveryClient,
+                                      injector.getInstance(ApplicationManagerFactory.class));
     // we use MetricStore directly, until RuntimeStats API changes
     RuntimeStats.metricStore = injector.getInstance(MetricStore.class);
   }
@@ -347,10 +360,12 @@ public class TestBase {
   protected static ApplicationManager deployApplication(Id.Namespace namespace,
                                                         Class<? extends Application> applicationClz,
                                                         File... bundleEmbeddedJars) {
-    ApplicationManager manager = getTestManager().deployApplication(namespace, applicationClz, bundleEmbeddedJars);
-    applicationManagers.add(manager);
-    return manager;
+    ApplicationManager applicationManager = getTestManager().deployApplication(namespace, applicationClz,
+                                                                               bundleEmbeddedJars);
+    applicationManagers.add(applicationManager);
+    return applicationManager;
   }
+
 
   /**
    * Deploys an {@link Application}. The {@link co.cask.cdap.api.flow.Flow Flows} and
@@ -368,9 +383,8 @@ public class TestBase {
   /**
    * Clear the state of app fabric, by removing all deployed applications, Datasets and Streams.
    * This method could be called between two unit tests, to make them independent.
-   *
    */
-  protected void clear() {
+  protected static void clear() {
     try {
       getTestManager().clear();
     } catch (Exception e) {
@@ -382,8 +396,7 @@ public class TestBase {
   /**
    * Deploys {@link DatasetModule}.
    *
-   * @param namespace namespace to deploy the module to
-   * @param moduleName name of the module
+   * @param moduleName name othe module
    * @param datasetModule module class
    * @throws Exception
    */
@@ -392,10 +405,11 @@ public class TestBase {
     getTestManager().deployDatasetModule(namespace, moduleName, datasetModule);
   }
 
+
   /**
    * Deploys {@link DatasetModule}.
    *
-   * @param moduleName name of the module
+   * @param moduleName name othe module
    * @param datasetModule module class
    * @throws Exception
    */
@@ -412,12 +426,12 @@ public class TestBase {
    * @param props properties
    * @param <T> type of the dataset admin
    */
-  protected static <T extends DatasetAdmin> T addDatasetInstance(Id.Namespace namespace,
-                                                                 String datasetTypeName,
+  protected static <T extends DatasetAdmin> T addDatasetInstance(Id.Namespace namespace, String datasetTypeName,
                                                                  String datasetInstanceName,
                                                                  DatasetProperties props) throws Exception {
     return getTestManager().addDatasetInstance(namespace, datasetTypeName, datasetInstanceName, props);
   }
+
 
   /**
    * Adds an instance of a dataset.
@@ -440,33 +454,44 @@ public class TestBase {
    * @param datasetInstanceName instance name
    * @param <T> type of the dataset admin
    */
-  protected static <T extends DatasetAdmin> T addDatasetInstance(Id.Namespace namespace,
-                                                                 String datasetTypeName,
-                                                                 String datasetInstanceName) throws Exception {
+  protected final <T extends DatasetAdmin> T addDatasetInstance(Id.Namespace namespace, String datasetTypeName,
+                                                                String datasetInstanceName) throws Exception {
     return addDatasetInstance(namespace, datasetTypeName, datasetInstanceName, DatasetProperties.EMPTY);
   }
 
   /**
-   * Gets Dataset manager of Dataset instance of type <T>.
+   * Adds an instance of dataset.
    *
-   * @param namespace the namespace of the dataset
-   * @param datasetInstanceName instance name of dataset
+   * @param datasetTypeName dataset type name
+   * @param datasetInstanceName instance name
+   * @param <T> type of the dataset admin
+   */
+  protected final <T extends DatasetAdmin> T addDatasetInstance(String datasetTypeName,
+                                                                String datasetInstanceName) throws Exception {
+    return addDatasetInstance(Constants.DEFAULT_NAMESPACE_ID, datasetTypeName, datasetInstanceName,
+                              DatasetProperties.EMPTY);
+  }
+
+  /**
+   * Gets Dataset manager of Dataset instance of type <T>
+   *
+   * @param datasetInstanceName - instance name of dataset
    * @return Dataset Manager of Dataset instance of type <T>
    * @throws Exception
    */
-  protected static <T> DataSetManager<T> getDataset(Id.Namespace namespace,
-                                                    String datasetInstanceName) throws Exception {
+  protected final <T> DataSetManager<T> getDataset(Id.Namespace namespace,
+                                                   String datasetInstanceName) throws Exception {
     return getTestManager().getDataset(namespace, datasetInstanceName);
   }
 
   /**
-   * Gets Dataset manager of Dataset instance of type <T>.
+   * Gets Dataset manager of Dataset instance of type <T>
    *
-   * @param datasetInstanceName instance name of dataset
+   * @param datasetInstanceName - instance name of dataset
    * @return Dataset Manager of Dataset instance of type <T>
    * @throws Exception
    */
-  protected static <T> DataSetManager<T> getDataset(String datasetInstanceName) throws Exception {
+  protected final <T> DataSetManager<T> getDataset(String datasetInstanceName) throws Exception {
     return getDataset(Constants.DEFAULT_NAMESPACE_ID, datasetInstanceName);
   }
 
@@ -481,6 +506,6 @@ public class TestBase {
    * Returns a JDBC connection that allows to run SQL queries over data sets.
    */
   protected final Connection getQueryClient() throws Exception {
-    return getTestManager().getQueryClient(Constants.DEFAULT_NAMESPACE_ID);
+    return getQueryClient(Constants.DEFAULT_NAMESPACE_ID);
   }
 }

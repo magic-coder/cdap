@@ -332,7 +332,8 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
 
   private void assertWorkerDatasetWrites(ApplicationManager applicationManager, byte[] startRow, byte[] endRow,
                                          int expectedCount, int expectedTotalCount) throws Exception {
-    DataSetManager<KeyValueTable> datasetManager = getDataset(AppUsingGetServiceURL.WORKER_INSTANCES_DATASET);
+    DataSetManager<KeyValueTable> datasetManager = applicationManager
+      .getDataSet(AppUsingGetServiceURL.WORKER_INSTANCES_DATASET);
     KeyValueTable instancesTable = datasetManager.get();
     CloseableIterator<KeyValue<byte[], byte[]>> instancesIterator = instancesTable.scan(startRow, endRow);
     try {
@@ -570,7 +571,8 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
     // The stream MR only consume the body, not the header.
     Assert.assertEquals(3 * 100L, totalCount);
 
-    DataSetManager<MyKeyValueTableDefinition.KeyValueTable> mydatasetManager = getDataset("mydataset");
+    DataSetManager<MyKeyValueTableDefinition.KeyValueTable> mydatasetManager =
+      applicationManager.getDataSet("mydataset");
     Assert.assertEquals(100L, Long.valueOf(mydatasetManager.get().get("title:title")).longValue());
   }
 
@@ -609,17 +611,17 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
   @Test
   public void testAppRedeployKeepsData() throws Exception {
     ApplicationManager appManager = deployApplication(AppWithTable.class);
-    DataSetManager<Table> myTableManager = getDataset("my_table");
+    DataSetManager<Table> myTableManager = appManager.getDataSet("my_table");
     myTableManager.get().put(new Put("key1", "column1", "value1"));
     myTableManager.flush();
 
     // Changes should be visible to other instances of datasets
-    DataSetManager<Table> myTableManager2 = getDataset("my_table");
+    DataSetManager<Table> myTableManager2 = appManager.getDataSet("my_table");
     Assert.assertEquals("value1", myTableManager2.get().get(new Get("key1", "column1")).getString("column1"));
 
     // Even after redeploy of an app: changes should be visible to other instances of datasets
     appManager = deployApplication(AppWithTable.class);
-    DataSetManager<Table> myTableManager3 = getDataset("my_table");
+    DataSetManager<Table> myTableManager3 = appManager.getDataSet("my_table");
     Assert.assertEquals("value1", myTableManager3.get().get(new Get("key1", "column1")).getString("column1"));
 
     // Calling commit again (to test we can call it multiple times)
@@ -658,7 +660,7 @@ public class TestFrameworkTestRun extends TestFrameworkTestBase {
 
     flowManager.stop();
 
-    DataSetManager<Table> dataSetManager = getDataset("conf");
+    DataSetManager<Table> dataSetManager = appManager.getDataSet("conf");
     Table confTable = dataSetManager.get();
 
     Assert.assertEquals("generator", confTable.get(new Get("key", "column")).getString("column"));

@@ -125,13 +125,13 @@ public class HBaseDatasetMetricsReporter extends AbstractScheduledService implem
         Collection<DatasetSpecificationSummary> instances = dsFramework.getInstances(statEntry.getKey().getNamespace());
         for (DatasetSpecificationSummary spec : instances) {
           // todo :  we are stripping cdap.{namespace} right now , this can be removed after namespace fixes
-          // and logic can be moved to DatasetSpecification
           String dsName = stripRootPrefixAndNamespace(spec.getName());
           if (tableName.startsWith(dsName)) {
             MetricsCollector collector =
               metricsService.getCollector(ImmutableMap.of(Constants.Metrics.Tag.NAMESPACE, namespace,
                                                           Constants.Metrics.Tag.DATASET, dsName));
-            collector.gauge("dataset.size.mb", statEntry.getValue().getTotalSizeMB());
+            //collector.gauge("dataset.size.mb", statEntry.getValue().getTotalSizeMB());
+            collector.gauge("dataset.size.mb", 10);
             break;
           }
         }

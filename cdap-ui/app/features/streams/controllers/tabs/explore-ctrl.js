@@ -4,7 +4,7 @@ angular.module(PKG.name + '.feature.streams')
 
       var dataSrc = new MyDataSource($scope);
 
-      $scope.activePanel = 2;
+      $scope.activePanel = 1;
 
 
       var now = Date.now();
@@ -105,6 +105,43 @@ angular.module(PKG.name + '.feature.streams')
               target: '_self',
               download: 'result.csv'
             })[0].click();
+          });
+      };
+
+      $scope.fileTypes = ['avro', 'csv', 'tsv', 'test', 'clf'];
+      $scope.type = $scope.fileTypes[0];
+      $scope.fields = [];
+      $scope.fieldTypes = ['string', 'int', 'double'];
+      $scope.fieldType = $scope.fieldTypes[0];
+
+      $scope.addField = function() {
+        $scope.fields.push(
+          { name: $scope.fieldName,
+            type: $scope.fieldType
+          });
+
+        $scope.fieldName = null;
+        $scope.fieldType = $scope.fieldTypes[0];
+
+      };
+
+      $scope.defineTable = function() {
+        var schema = {
+          'format': {
+            'name': $scope.type,
+            'schema': {
+              'type': 'record',
+              'name': $scope.name,
+              'fields': $scope.fields
+            }
+          }
+        };
+
+        dataSrc
+          .request({
+            _cdapNsPath: '/streams/' + $state.params.streamId + '/config',
+            method: 'PUT',
+            body: schema
           });
       };
 

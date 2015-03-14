@@ -24,6 +24,7 @@ angular.module(PKG.name + '.feature.streams')
               '&end=' + $scope.eventSearch.endMs +
               '&limit=' + $scope.eventSearch.limit
           }, function (result) {
+            console.log('result', result);
             $scope.eventSearch.results = result;
           });
       };
@@ -45,7 +46,7 @@ angular.module(PKG.name + '.feature.streams')
           })
           .then(function () {
             $scope.getQueries();
-            $scope.activePanel = 2;
+            $scope.activePanel = 3;
           });
       };
 

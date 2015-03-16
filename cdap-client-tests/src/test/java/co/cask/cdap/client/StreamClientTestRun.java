@@ -32,6 +32,8 @@ import com.google.common.base.Charsets;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.Lists;
 import com.google.common.io.ByteStreams;
+import org.apache.commons.httpclient.HttpClient;
+import org.apache.commons.httpclient.methods.PostMethod;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -101,10 +103,17 @@ public class StreamClientTestRun extends ClientTestBase {
     streamClient.create(streamId);
 
     // Send 5000 events
+    long start = System.currentTimeMillis();
     int eventCount = 5000;
     for (int i = 0; i < eventCount; i++) {
+//      HttpClient httpClient = new HttpClient();
+//      PostMethod post = new PostMethod(String.format("http://127.0.0.1:10000/v3/namespaces/%s/streams/%s",
+//                                                     clientConfig.getNamespace().getId(), streamId));
+//      post.setRequestBody("Testing " + i);
+//      httpClient.executeMethod(post);
       streamClient.sendEvent(streamId, "Testing " + i);
     }
+    double seconds = (System.currentTimeMillis() - start) / 1000.0;
 
     // Read all events
     List<StreamEvent> events = streamClient.getEvents(streamId, 0, Long.MAX_VALUE,

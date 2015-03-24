@@ -4,6 +4,7 @@ angular.module(PKG.name + '.feature.etlapps')
     $scope.displayName = 'ETL App 1';
     $scope.description = '';
     var i = 0;
+    $scope.mappedFields = [];
     $scope.properties = [
       {
         key: 'key1',
@@ -110,6 +111,13 @@ angular.module(PKG.name + '.feature.etlapps')
       if (matchIndex) {
         $scope.outputSchema.fields.splice(matchIndex, 1);
       }
-    }
+    };
+
+    $scope.addMappedFields = function() {
+      $scope.mappedFields.push({
+        fromField: "",
+        toField: ""
+      })
+    };
 
   });

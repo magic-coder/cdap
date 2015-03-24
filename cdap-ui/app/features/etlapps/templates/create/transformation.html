@@ -1,0 +1,48 @@
+
+<div class="row">
+  <div class="col-sm-3">
+    <strong> Field name </strong>
+  </div>
+  <div class="col-sm-3">
+    <strong> Type </strong>
+  </div>
+  <div class="col-sm-3">
+    <strong> Field name </strong>
+  </div>
+  <div class="col-sm-3">
+    <strong> Type </strong>
+  </div>
+</div>
+
+<br/>
+
+
+<div ng-repeat="field in mappedFields" class="mapperField row">
+  <div class="col-sm-12">
+    <div class="row">
+      <div class="col-sm-4">
+        <div class="input-group">
+          <div class="input-group-addon">Name</div>
+          <input type="text" placeholder="From Field" ng-bind="field.fromField" class="form-control input-sm"/>
+        </div>
+      </div>
+      <div class="col-sm-4 text-center">
+        <span> Arrow </span>
+      </div>
+      <div class="col-sm-4">
+        <div class="input-group">
+          <div class="input-group-addon">Name</div>
+          <input type="text" placeholder="To Field" ng-bind="field.toField" class="form-control input-sm"/>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<br />
+
+<div class="row text-center">
+  <div class="col-sm-12">
+    <span class="fa fa-plus-square fa-2x" ng-click="addMappedFields()"></span>
+  </div>
+</div>

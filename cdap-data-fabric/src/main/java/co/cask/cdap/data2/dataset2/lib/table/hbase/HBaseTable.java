@@ -21,6 +21,7 @@ import co.cask.cdap.api.dataset.DataSetException;
 import co.cask.cdap.api.dataset.DatasetContext;
 import co.cask.cdap.api.dataset.DatasetSpecification;
 import co.cask.cdap.api.dataset.table.ConflictDetection;
+import co.cask.cdap.api.dataset.table.Filter;
 import co.cask.cdap.api.dataset.table.Row;
 import co.cask.cdap.api.dataset.table.Scanner;
 import co.cask.cdap.common.conf.CConfiguration;
@@ -261,7 +262,7 @@ public class HBaseTable extends BufferingTable {
     return new HBaseScanner(resultScanner, columnFamily);
   }
 
-  private <T> void setFilterIfNeeded(Scan scan, @Nullable T filter) {
+  private void setFilterIfNeeded(Scan scan, @Nullable Filter filter) {
     if (filter == null) {
       return;
     }

@@ -32,7 +32,7 @@ public class Scan {
   @Nullable
   private final byte[] stopRow;
   @Nullable
-  private final Object filter;
+  private final Filter filter;
 
   /**
    * Creates {@link Scan} for a given start and stop row keys.
@@ -48,9 +48,8 @@ public class Scan {
    * @param startRow start row inclusive; {@code null} means start from first row of the table
    * @param stopRow stop row exclusive; {@code null} means scan all rows to the end of the table
    * @param filter filter to be used on scan
-   * @param <T> type of the filter
    */
-  public <T> Scan(@Nullable byte[] startRow, @Nullable byte[] stopRow, @Nullable T filter) {
+  public Scan(@Nullable byte[] startRow, @Nullable byte[] stopRow, @Nullable Filter filter) {
     this.startRow = startRow;
     this.stopRow = stopRow;
     this.filter = filter;
@@ -67,8 +66,8 @@ public class Scan {
   }
 
   @Nullable
-  public <T> T getFilter() {
-    return filter == null ? null : (T) filter;
+  public Filter getFilter() {
+    return filter;
   }
 
   @Override

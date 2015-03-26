@@ -20,6 +20,7 @@ import co.cask.cdap.api.common.Bytes;
 import co.cask.cdap.api.dataset.DataSetException;
 import co.cask.cdap.api.dataset.DatasetContext;
 import co.cask.cdap.api.dataset.table.ConflictDetection;
+import co.cask.cdap.api.dataset.table.Filter;
 import co.cask.cdap.api.dataset.table.Scan;
 import co.cask.cdap.api.dataset.table.Scanner;
 import co.cask.cdap.common.conf.CConfiguration;
@@ -130,7 +131,7 @@ public class InMemoryTable extends BufferingTable {
 
   private NavigableMap<byte[], NavigableMap<byte[], byte[]>> applyFilter(
                                                     NavigableMap<byte[], NavigableMap<byte[], byte[]>> map,
-                                                    @Nullable Object filter) {
+                                                    @Nullable Filter filter) {
 
     if (filter == null) {
       return map;

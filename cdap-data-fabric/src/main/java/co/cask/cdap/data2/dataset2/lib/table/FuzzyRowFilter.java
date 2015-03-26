@@ -52,7 +52,7 @@ import java.util.List;
  * I.e. fuzzy info tells the matching mask is "????_99_????_01", where at ? can be any value.
  *
  */
-public class FuzzyRowFilter {
+public final class FuzzyRowFilter {
 
   private final List<ImmutablePair<byte[], byte[]>> fuzzyKeysData;
 

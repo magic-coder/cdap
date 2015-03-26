@@ -42,6 +42,7 @@ import co.cask.cdap.data2.transaction.stream.StreamConfig;
 import co.cask.cdap.data2.util.hbase.HBaseTableUtilFactory;
 import co.cask.cdap.internal.app.runtime.batch.dataset.DataSetInputFormat;
 import co.cask.cdap.internal.app.runtime.batch.dataset.DataSetOutputFormat;
+import co.cask.cdap.internal.app.runtime.distributed.DistributedMapReduceProgramRunner;
 import co.cask.cdap.proto.Id;
 import co.cask.cdap.proto.ProgramType;
 import co.cask.tephra.Transaction;
@@ -60,16 +61,28 @@ import com.google.common.util.concurrent.AbstractExecutionThreadService;
 import com.google.inject.ProvisionException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.InputFormat;
 import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.JobID;
 import org.apache.hadoop.mapreduce.MRJobConfig;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.OutputFormat;
 import org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.mapreduce.TypeConverter;
+import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.Credentials;
 import org.apache.hadoop.security.UserGroupInformation;
+import org.apache.hadoop.security.token.TokenIdentifier;
+import org.apache.hadoop.yarn.api.records.ApplicationId;
+import org.apache.hadoop.yarn.api.records.ApplicationReport;
+import org.apache.hadoop.yarn.api.records.Token;
+import org.apache.hadoop.yarn.api.records.YarnApplicationState;
+import org.apache.hadoop.yarn.client.api.YarnClient;
+import org.apache.hadoop.yarn.util.ConverterUtils;
 import org.apache.twill.filesystem.Location;
 import org.apache.twill.filesystem.LocationFactory;
+import org.apache.twill.internal.yarn.YarnUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -77,6 +90,7 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
+import java.net.InetSocketAddress;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
@@ -149,7 +163,7 @@ final class MapReduceRuntimeService extends AbstractExecutionThreadService {
       // If runs in secure cluster, this program runner is running in a yarn container, hence not able
       // to get authenticated with the history and MR-AM.
       mapredConf.unset("mapreduce.jobhistory.address");
-      mapredConf.setBoolean(MRJobConfig.JOB_AM_ACCESS_DISABLED, true);
+      mapredConf.setBoolean(MRJobConfig.JOB_AM_ACCESS_DISABLED, false);
 
       Credentials credentials = UserGroupInformation.getCurrentUser().getCredentials();
       LOG.info("Running in secure mode; adding all user credentials: {}", credentials.getAllTokens());
@@ -228,6 +242,40 @@ final class MapReduceRuntimeService extends AbstractExecutionThreadService {
             // submits job and returns immediately. Shouldn't need to set context ClassLoader.
             job.submit();
 
+            JobID jobid = job.getStatus().getJobID();
+            ApplicationId applicationId = TypeConverter.toYarn(jobid).getAppId();
+            YarnClient yarnClient = YarnClient.createYarnClient();
+            yarnClient.init(hConf);
+            yarnClient.start();
+            try {
+              InetSocketAddress address = YarnUtils.getRMAddress(hConf);
+              LOG.info("MAPREDUCE ApplicationId is {}", applicationId);
+              while (!yarnClient.getApplicationReport(applicationId).
+                getYarnApplicationState().equals(YarnApplicationState.RUNNING)) {
+                continue;
+              }
+              ApplicationReport applicationReport = yarnClient.getApplicationReport(applicationId);
+              LOG.info("Application Report is {}", applicationReport);
+
+              InetSocketAddress clientAddress = NetUtils.createSocketAddrForHost(applicationReport.getHost(),
+                                                                                 applicationReport.getRpcPort());
+              org.apache.hadoop.security.token.Token<TokenIdentifier> token =
+                ConverterUtils.convertFromYarn(applicationReport.getClientToAMToken(), clientAddress);
+              LOG.info("!!!!MRM Adding client AM token {}", token);
+              //DistributedMapReduceProgramRunner.addToSecureStore(new Text(token.getService()), token);
+              LOG.info("Current USER : {}", UserGroupInformation.getCurrentUser());
+              LOG.info("Current user credentials : {}",
+                       UserGroupInformation.getCurrentUser().getCredentials().getAllTokens());
+              Credentials credentials = UserGroupInformation.getCurrentUser().getCredentials();
+              credentials.addToken(new Text(applicationReport.getClientToAMToken().getService()), token);
+              LOG.info("Current user credentials after adding client token : {}",
+                       UserGroupInformation.getCurrentUser().getCredentials().getAllTokens());
+              UserGroupInformation.getCurrentUser().addCredentials(credentials);
+              LOG.info("2 Current user credentials after adding client token : {}",
+                       UserGroupInformation.getCurrentUser().getCredentials().getAllTokens());
+            } finally {
+              yarnClient.stop();
+            }
             this.job = job;
             this.transaction = tx;
             this.cleanupTask = createCleanupTask(jobJar, programJarCopy);

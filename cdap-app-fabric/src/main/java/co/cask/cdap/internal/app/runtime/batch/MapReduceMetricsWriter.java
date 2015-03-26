@@ -129,6 +129,8 @@ public class MapReduceMetricsWriter {
   }
 
   private long getTaskCounter(TaskCounter taskCounter) throws IOException, InterruptedException {
+    LOG.info("History URL {}", jobConf.getHistoryUrl());
+    LOG.info("Job Statuses  {}", jobConf.getCluster().getAllJobStatuses());
     return jobConf.getCounters().findCounter(TaskCounter.class.getName(), taskCounter.name()).getValue();
   }
 

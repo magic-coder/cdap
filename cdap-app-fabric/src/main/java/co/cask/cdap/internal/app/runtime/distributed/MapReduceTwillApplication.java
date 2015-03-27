@@ -19,10 +19,16 @@ import co.cask.cdap.api.mapreduce.MapReduceSpecification;
 import co.cask.cdap.app.guice.AppFabricServiceRuntimeModule;
 import co.cask.cdap.app.program.Program;
 import co.cask.cdap.common.conf.Constants;
+import co.cask.cdap.data2.datafabric.dataset.service.DatasetService;
+import co.cask.cdap.data2.util.hbase.HBaseTableUtilFactory;
 import co.cask.cdap.proto.ProgramType;
 import com.clearspring.analytics.util.Lists;
+import com.google.common.base.Function;
 import com.google.common.base.Splitter;
+import com.google.common.base.Throwables;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
 import org.apache.twill.api.EventHandler;
 import org.apache.twill.api.ResourceSpecification;
@@ -35,7 +41,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.MalformedURLException;
 import java.net.URL;
+import java.net.URLClassLoader;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
@@ -146,15 +154,32 @@ public final class MapReduceTwillApplication implements TwillApplication {
           .add("hConf.xml", hConfig.toURI())
           .add("cConf.xml", cConfig.toURI());
 
-
     try {
-      for (File jarFile : traceDependencies("org.apache.hadoop.mapreduce.v2.app.MRClientSecurityInfo",
-                                            getBoostrapClasses(), null)) {
+      for (File jarFile : getAllExploreDependencies()) {
         twillSpecs = twillSpecs.add(jarFile.getName(), jarFile);
       }
     } catch (IOException e) {
       throw new RuntimeException("Unable to trace Explore dependencies", e);
     }
     return twillSpecs.apply().anyOrder().withEventHandler(eventHandler).build();
+  }
+
+  public Set<File> getAllExploreDependencies() throws IOException {
+    Set<String> bootstrapClassPaths = getBoostrapClasses();
+    ClassLoader classLoader = this.getClass().getClassLoader();
+    Set<File> hBaseTableDeps = traceDependencies(HBaseTableUtilFactory.getHBaseTableUtilClass().getName(),
+                                                 bootstrapClassPaths, classLoader);
+
+    // Note the order of dependency jars is important so that HBase jars come first in the classpath order
+    // LinkedHashSet maintains insertion order while removing duplicate entries.
+    Set<File> orderedDependencies = new LinkedHashSet<File>();
+    orderedDependencies.addAll(hBaseTableDeps);
+
+    orderedDependencies.addAll(traceDependencies("org.apache.hadoop.mapred.YarnClientProtocolProvider",
+                                                 bootstrapClassPaths, classLoader));
+
+    orderedDependencies.addAll(traceDependencies("org.apache.hadoop.mapreduce.v2.app.MRClientSecurityInfo",
+                                                 bootstrapClassPaths, classLoader));
+    return orderedDependencies;
   }
 }

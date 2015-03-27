@@ -42,7 +42,7 @@ import co.cask.cdap.data2.transaction.stream.StreamConfig;
 import co.cask.cdap.data2.util.hbase.HBaseTableUtilFactory;
 import co.cask.cdap.internal.app.runtime.batch.dataset.DataSetInputFormat;
 import co.cask.cdap.internal.app.runtime.batch.dataset.DataSetOutputFormat;
-import co.cask.cdap.internal.app.runtime.distributed.DistributedMapReduceProgramRunner;
+import co.cask.cdap.internal.app.runtime.distributed.MapReduceTwillApplication;
 import co.cask.cdap.proto.Id;
 import co.cask.cdap.proto.ProgramType;
 import co.cask.tephra.Transaction;
@@ -61,7 +61,6 @@ import com.google.common.util.concurrent.AbstractExecutionThreadService;
 import com.google.inject.ProvisionException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.InputFormat;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.JobID;
@@ -70,19 +69,16 @@ import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.OutputFormat;
 import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.TypeConverter;
-import org.apache.hadoop.net.NetUtils;
+import org.apache.hadoop.mapreduce.v2.api.MRClientProtocol;
+import org.apache.hadoop.mapreduce.v2.api.protocolrecords.GetCountersRequest;
+import org.apache.hadoop.mapreduce.v2.api.protocolrecords.GetJobReportRequest;
+import org.apache.hadoop.mapreduce.v2.api.records.JobState;
 import org.apache.hadoop.security.Credentials;
 import org.apache.hadoop.security.UserGroupInformation;
-import org.apache.hadoop.security.token.TokenIdentifier;
 import org.apache.hadoop.yarn.api.records.ApplicationId;
-import org.apache.hadoop.yarn.api.records.ApplicationReport;
-import org.apache.hadoop.yarn.api.records.Token;
-import org.apache.hadoop.yarn.api.records.YarnApplicationState;
-import org.apache.hadoop.yarn.client.api.YarnClient;
-import org.apache.hadoop.yarn.util.ConverterUtils;
+import org.apache.hadoop.yarn.util.Records;
 import org.apache.twill.filesystem.Location;
 import org.apache.twill.filesystem.LocationFactory;
-import org.apache.twill.internal.yarn.YarnUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -90,7 +86,6 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
-import java.net.InetSocketAddress;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
@@ -111,6 +106,8 @@ final class MapReduceRuntimeService extends AbstractExecutionThreadService {
 
   private static final Logger LOG = LoggerFactory.getLogger(MapReduceRuntimeService.class);
 
+  private org.apache.hadoop.mapreduce.v2.app.MRClientSecurityInfo dummy;
+
   // Name of configuration source if it is set programmatically. This constant is not defined in Hadoop
   private static final String PROGRAMMATIC_SOURCE = "programmatically";
 
@@ -127,6 +124,9 @@ final class MapReduceRuntimeService extends AbstractExecutionThreadService {
   private Transaction transaction;
   private Runnable cleanupTask;
   private volatile boolean stopRequested;
+  private MRClientProtocol mrClientProtocol;
+  private JobID jobID;
+  private ApplicationId applicationId;
 
   MapReduceRuntimeService(CConfiguration cConf, Configuration hConf,
                           MapReduce mapReduce, MapReduceSpecification specification,
@@ -242,40 +242,21 @@ final class MapReduceRuntimeService extends AbstractExecutionThreadService {
             // submits job and returns immediately. Shouldn't need to set context ClassLoader.
             job.submit();
 
-            JobID jobid = job.getStatus().getJobID();
-            ApplicationId applicationId = TypeConverter.toYarn(jobid).getAppId();
-            YarnClient yarnClient = YarnClient.createYarnClient();
-            yarnClient.init(hConf);
-            yarnClient.start();
-            try {
-              InetSocketAddress address = YarnUtils.getRMAddress(hConf);
-              LOG.info("MAPREDUCE ApplicationId is {}", applicationId);
-              while (!yarnClient.getApplicationReport(applicationId).
-                getYarnApplicationState().equals(YarnApplicationState.RUNNING)) {
-                continue;
-              }
-              ApplicationReport applicationReport = yarnClient.getApplicationReport(applicationId);
-              LOG.info("Application Report is {}", applicationReport);
+            this.jobID = job.getStatus().getJobID();
+            this.applicationId = TypeConverter.toYarn(jobID).getAppId();
+            this.mrClientProtocol = AMTokenUtils.getMRClientProtocol(hConf, applicationId);
 
-              InetSocketAddress clientAddress = NetUtils.createSocketAddrForHost(applicationReport.getHost(),
-                                                                                 applicationReport.getRpcPort());
-              org.apache.hadoop.security.token.Token<TokenIdentifier> token =
-                ConverterUtils.convertFromYarn(applicationReport.getClientToAMToken(), clientAddress);
-              LOG.info("!!!!MRM Adding client AM token {}", token);
-              //DistributedMapReduceProgramRunner.addToSecureStore(new Text(token.getService()), token);
-              LOG.info("Current USER : {}", UserGroupInformation.getCurrentUser());
-              LOG.info("Current user credentials : {}",
-                       UserGroupInformation.getCurrentUser().getCredentials().getAllTokens());
-              Credentials credentials = UserGroupInformation.getCurrentUser().getCredentials();
-              credentials.addToken(new Text(applicationReport.getClientToAMToken().getService()), token);
-              LOG.info("Current user credentials after adding client token : {}",
-                       UserGroupInformation.getCurrentUser().getCredentials().getAllTokens());
-              UserGroupInformation.getCurrentUser().addCredentials(credentials);
-              LOG.info("2 Current user credentials after adding client token : {}",
-                       UserGroupInformation.getCurrentUser().getCredentials().getAllTokens());
-            } finally {
-              yarnClient.stop();
-            }
+            ClassLoader currentClassLoader = this.getClass().getClassLoader();
+            LOG.info("Loading org.apache.hadoop.security.SecurityInfo class : {}",
+                       ClassLoaders.loadClass("org.apache.hadoop.security.SecurityInfo", currentClassLoader, this));
+
+            LOG.info("Loading org.apache.hadoop.yarn.security.client.ClientToAMTokenSelector class : {}",
+                     ClassLoaders.loadClass("org.apache.hadoop.yarn.security.client.ClientToAMTokenSelector",
+                                            currentClassLoader, this));
+            LOG.info("Loading org.apache.hadoop.mapreduce.v2.app.MRClientSecurityInfo class : {}",
+                     ClassLoaders.loadClass("org.apache.hadoop.mapreduce.v2.app.MRClientSecurityInfo",
+                                            currentClassLoader, this));
+
             this.job = job;
             this.transaction = tx;
             this.cleanupTask = createCleanupTask(jobJar, programJarCopy);
@@ -302,8 +283,9 @@ final class MapReduceRuntimeService extends AbstractExecutionThreadService {
     MapReduceMetricsWriter metricsWriter = new MapReduceMetricsWriter(job, context);
 
     // until job is complete report stats
-    while (!job.isComplete()) {
-      metricsWriter.reportStats();
+    while (!isComplete()) {
+      LOG.info("Reporting Stats");
+      metricsWriter.reportStats(mrClientProtocol, TypeConverter.toYarn(jobID));
 
       // we report to metrics backend every second, so 1 sec is enough here. That's mapreduce job anyways (not
       // short) ;)
@@ -312,7 +294,7 @@ final class MapReduceRuntimeService extends AbstractExecutionThreadService {
 
     LOG.info("MapReduce Job is complete, status: {}, job: {}", job.isSuccessful(), context);
     // NOTE: we want to report the final stats (they may change since last report and before job completed)
-    metricsWriter.reportStats();
+    metricsWriter.reportStats(mrClientProtocol, TypeConverter.toYarn(jobID));
     // If we don't sleep, the final stats may not get sent before shutdown.
     TimeUnit.SECONDS.sleep(2L);
 
@@ -324,12 +306,38 @@ final class MapReduceRuntimeService extends AbstractExecutionThreadService {
     }
   }
 
+  private GetCountersRequest getCountersRequest() {
+    GetCountersRequest request = Records.newRecord(GetCountersRequest.class);
+    request.setJobId(TypeConverter.toYarn(jobID));
+    return request;
+  }
+  private GetJobReportRequest getJobReportRequest() {
+    GetJobReportRequest request = Records.newRecord(GetJobReportRequest.class);
+    request.setJobId(TypeConverter.toYarn(jobID));
+    return request;
+  }
+
+  private boolean isComplete() throws IOException {
+    JobState state = mrClientProtocol.getJobReport(getJobReportRequest()).getJobReport().getJobState();
+    LOG.info("Checking if Job is Complete.. state {}", state);
+    if (state.equals(JobState.FAILED) || state.equals(JobState.ERROR) || state.equals(JobState.SUCCEEDED) ||
+      state.equals(JobState.KILLED)) {
+      LOG.info("Checking is Complete");
+      return true;
+    }
+    return false;
+  }
+
+  private boolean isSuccessful() throws IOException {
+    JobState state = mrClientProtocol.getJobReport(getJobReportRequest()).getJobReport().getJobState();
+    LOG.info("Checking if Job is Complete.. State is {}", state);
+    return  state.equals(JobState.SUCCEEDED);
+  }
+
   @Override
   protected void shutDown() throws Exception {
-    boolean success = job.isSuccessful();
-
     try {
-      if (success) {
+      if (isSuccessful()) {
         LOG.info("Committing MapReduce Job transaction: {}", context);
         // committing long running tx: no need to commit datasets, as they were committed in external processes
         // also no need to rollback changes if commit fails, as these changes where performed by mapreduce tasks
@@ -345,7 +353,7 @@ final class MapReduceRuntimeService extends AbstractExecutionThreadService {
     } finally {
       // whatever happens we want to call this
       try {
-        onFinish(success);
+        onFinish(isSuccessful());
       } finally {
         context.close();
         cleanupTask.run();

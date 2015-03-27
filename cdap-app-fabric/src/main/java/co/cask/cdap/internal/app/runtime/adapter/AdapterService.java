@@ -27,7 +27,6 @@ import co.cask.cdap.app.ApplicationSpecification;
 import co.cask.cdap.app.deploy.Manager;
 import co.cask.cdap.app.deploy.ManagerFactory;
 import co.cask.cdap.app.store.Store;
-import co.cask.cdap.app.store.StoreFactory;
 import co.cask.cdap.common.conf.CConfiguration;
 import co.cask.cdap.common.conf.Constants;
 import co.cask.cdap.common.exception.AdapterNotFoundException;
@@ -99,7 +98,7 @@ public class AdapterService extends AbstractIdleService {
 
   @Inject
   public AdapterService(CConfiguration configuration, DatasetFramework datasetFramework, Scheduler scheduler,
-                        StreamAdmin streamAdmin, StoreFactory storeFactory,
+                        StreamAdmin streamAdmin, Store store,
                         ManagerFactory<DeploymentInfo, ApplicationWithPrograms> managerFactory,
                         PreferencesStore preferencesStore, NamespacedLocationFactory namespacedLocationFactory) {
     this.configuration = configuration;
@@ -107,7 +106,7 @@ public class AdapterService extends AbstractIdleService {
     this.scheduler = scheduler;
     this.streamAdmin = streamAdmin;
     this.namespacedLocationFactory = namespacedLocationFactory;
-    this.store = storeFactory.create();
+    this.store = store;
     this.managerFactory = managerFactory;
     this.adapterTypeInfos = Maps.newHashMap();
     this.preferencesStore = preferencesStore;

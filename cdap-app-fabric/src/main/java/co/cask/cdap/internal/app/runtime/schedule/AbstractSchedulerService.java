@@ -22,7 +22,6 @@ import co.cask.cdap.api.schedule.ScheduleSpecification;
 import co.cask.cdap.app.ApplicationSpecification;
 import co.cask.cdap.app.runtime.ProgramRuntimeService;
 import co.cask.cdap.app.store.Store;
-import co.cask.cdap.app.store.StoreFactory;
 import co.cask.cdap.common.conf.CConfiguration;
 import co.cask.cdap.common.conf.Constants;
 import co.cask.cdap.common.exception.ApplicationNotFoundException;
@@ -55,20 +54,18 @@ public abstract class AbstractSchedulerService extends AbstractIdleService imple
   private static final Logger LOG = LoggerFactory.getLogger(AbstractSchedulerService.class);
   private final TimeScheduler timeScheduler;
   private final StreamSizeScheduler streamSizeScheduler;
-  private final StoreFactory storeFactory;
   private final CConfiguration cConf;
-
-  private Store store;
+  private final Store store;
 
   public AbstractSchedulerService(Supplier<org.quartz.Scheduler> schedulerSupplier,
                                   StreamSizeScheduler streamSizeScheduler,
-                                  StoreFactory storeFactory, ProgramRuntimeService programRuntimeService,
-                                  PreferencesStore preferencesStore, CConfiguration cConf) {
-    this.timeScheduler = new TimeScheduler(schedulerSupplier, storeFactory, programRuntimeService,
+                                  ProgramRuntimeService programRuntimeService,
+                                  PreferencesStore preferencesStore, CConfiguration cConf, Store store) {
+    this.timeScheduler = new TimeScheduler(schedulerSupplier, store, programRuntimeService,
                                            preferencesStore, cConf);
     this.streamSizeScheduler = streamSizeScheduler;
-    this.storeFactory = storeFactory;
     this.cConf = cConf;
+    this.store = store;
   }
 
   private boolean isLazyStart() {
@@ -275,7 +272,7 @@ public abstract class AbstractSchedulerService extends AbstractIdleService imple
 
   @Override
   public void deleteAllSchedules(Id.Namespace namespaceId) throws SchedulerException {
-    for (ApplicationSpecification appSpec : getStore().getAllApplications(namespaceId)) {
+    for (ApplicationSpecification appSpec : store.getAllApplications(namespaceId)) {
       deleteAllSchedules(namespaceId, appSpec);
     }
   }
@@ -310,16 +307,9 @@ public abstract class AbstractSchedulerService extends AbstractIdleService imple
                          programType.name(), program.getId());
   }
 
-  private synchronized Store getStore() {
-    if (store == null) {
-      store = storeFactory.create();
-    }
-    return store;
-  }
-
   private Scheduler getSchedulerForSchedule(Id.Program program, SchedulableProgramType programType,
                                             String scheduleName) throws NotFoundException {
-    ApplicationSpecification appSpec = getStore().getApplication(program.getApplication());
+    ApplicationSpecification appSpec = store.getApplication(program.getApplication());
     if (appSpec == null) {
       throw new ApplicationNotFoundException(program.getApplicationId());
     }

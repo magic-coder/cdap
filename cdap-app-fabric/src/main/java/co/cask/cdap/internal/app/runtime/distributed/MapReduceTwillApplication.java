@@ -68,65 +68,6 @@ public final class MapReduceTwillApplication implements TwillApplication {
     this.eventHandler = eventHandler;
   }
 
-
-  /**
-   * Trace the dependencies files of the given className, using the classLoader,
-   * and excluding any class contained in the bootstrapClassPaths and Kryo classes.
-   * We need to remove Kryo dependency in the Explore container. Spark introduced version 2.21 version of Kryo,
-   * which would be normally shipped to the Explore container. Yet, Hive requires Kryo 2.22,
-   * and gets it from the Hive jars - hive-exec.jar to be precise.
-   *
-   * Nothing is returned if the classLoader does not contain the className.
-   */
-  public static Set<File> traceDependencies(String className, final Set<String> bootstrapClassPaths,
-                                            ClassLoader classLoader)
-    throws IOException {
-    ClassLoader usingCL = classLoader;
-    if (usingCL == null) {
-      usingCL = AppFabricServiceRuntimeModule.class.getClassLoader();
-    }
-    final Set<File> jarFiles = Sets.newHashSet();
-
-    Dependencies.findClassDependencies(
-      usingCL,
-      new Dependencies.ClassAcceptor() {
-        @Override
-        public boolean accept(String className, URL classUrl, URL classPathUrl) {
-          if (bootstrapClassPaths.contains(classPathUrl.getFile())) {
-            return false;
-          }
-
-          if (className.startsWith("com.esotericsoftware.kryo")) {
-            return false;
-          }
-
-          jarFiles.add(new File(classPathUrl.getFile()));
-          return true;
-        }
-      },
-      className
-    );
-
-    return jarFiles;
-  }
-
-  /**
-   * Return the list of absolute paths of the bootstrap classes.
-   */
-  public static Set<String> getBoostrapClasses() {
-    ImmutableSet.Builder<String> builder = ImmutableSet.builder();
-    for (String classpath : Splitter.on(File.pathSeparatorChar).split(System.getProperty("sun.boot.class.path"))) {
-      File file = new File(classpath);
-      builder.add(file.getAbsolutePath());
-      try {
-        builder.add(file.getCanonicalPath());
-      } catch (IOException e) {
-        LOG.warn("Could not add canonical path to aux class path for file {}", file.toString(), e);
-      }
-    }
-    return builder.build();
-  }
-
   @Override
   public TwillSpecification configure() {
     // These resources are for the container that runs the mapred client that will launch the actual mapred job.
@@ -153,33 +94,6 @@ public final class MapReduceTwillApplication implements TwillApplication {
           .add(programLocation.getName(), programLocation.toURI())
           .add("hConf.xml", hConfig.toURI())
           .add("cConf.xml", cConfig.toURI());
-
-    try {
-      for (File jarFile : getAllExploreDependencies()) {
-        twillSpecs = twillSpecs.add(jarFile.getName(), jarFile);
-      }
-    } catch (IOException e) {
-      throw new RuntimeException("Unable to trace Explore dependencies", e);
-    }
     return twillSpecs.apply().anyOrder().withEventHandler(eventHandler).build();
-  }
-
-  public Set<File> getAllExploreDependencies() throws IOException {
-    Set<String> bootstrapClassPaths = getBoostrapClasses();
-    ClassLoader classLoader = this.getClass().getClassLoader();
-    Set<File> hBaseTableDeps = traceDependencies(HBaseTableUtilFactory.getHBaseTableUtilClass().getName(),
-                                                 bootstrapClassPaths, classLoader);
-
-    // Note the order of dependency jars is important so that HBase jars come first in the classpath order
-    // LinkedHashSet maintains insertion order while removing duplicate entries.
-    Set<File> orderedDependencies = new LinkedHashSet<File>();
-    orderedDependencies.addAll(hBaseTableDeps);
-
-    orderedDependencies.addAll(traceDependencies("org.apache.hadoop.mapred.YarnClientProtocolProvider",
-                                                 bootstrapClassPaths, classLoader));
-
-    orderedDependencies.addAll(traceDependencies("org.apache.hadoop.mapreduce.v2.app.MRClientSecurityInfo",
-                                                 bootstrapClassPaths, classLoader));
-    return orderedDependencies;
   }
 }

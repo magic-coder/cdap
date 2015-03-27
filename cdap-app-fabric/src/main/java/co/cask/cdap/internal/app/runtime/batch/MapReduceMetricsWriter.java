@@ -20,15 +20,12 @@ import co.cask.cdap.app.metrics.MapReduceMetrics;
 import co.cask.cdap.common.conf.Constants;
 import co.cask.cdap.common.metrics.MetricsCollector;
 import co.cask.cdap.metrics.collect.MapReduceCounterCollectionService;
+import org.apache.hadoop.mapreduce.Counter;
+import org.apache.hadoop.mapreduce.Counters;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.TaskCounter;
 import org.apache.hadoop.mapreduce.TaskReport;
 import org.apache.hadoop.mapreduce.TaskType;
-import org.apache.hadoop.mapreduce.v2.api.MRClientProtocol;
-import org.apache.hadoop.mapreduce.v2.api.protocolrecords.GetCountersRequest;
-import org.apache.hadoop.mapreduce.v2.api.records.Counters;
-import org.apache.hadoop.mapreduce.v2.api.records.JobId;
-import org.apache.hadoop.yarn.util.Records;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,9 +49,6 @@ public class MapReduceMetricsWriter {
   private final MetricsCollector mapperMetrics;
   private final MetricsCollector reducerMetrics;
 
-  private MRClientProtocol clientProtocol;
-  private JobId jobId;
-
   public MapReduceMetricsWriter(Job jobConf, BasicMapReduceContext context) {
     this.jobConf = jobConf;
     this.context = context;
@@ -64,10 +58,8 @@ public class MapReduceMetricsWriter {
                                                                     MapReduceMetrics.TaskType.Reducer.getId());
   }
 
-  public void reportStats(MRClientProtocol clientProtocol, JobId jobId) throws IOException, InterruptedException {
-    this.clientProtocol = clientProtocol;
-    this.jobId = jobId;
-    //reportMapredStats();
+  public void reportStats() throws IOException, InterruptedException {
+    reportMapredStats();
     reportSystemStats();
   }
 
@@ -119,9 +111,8 @@ public class MapReduceMetricsWriter {
 
   // report system stats coming from user metrics or dataset operations
   private void reportSystemStats() throws IOException, InterruptedException {
-    LOG.info("Reporting Counters {}", getCounters());
-/*    Counters counters = getCounters();
-    for (String group : counters.getAllCounterGroups().keySet()) {
+    Counters counters = jobConf.getCounters();
+    for (String group : counters.getGroupNames()) {
       if (group.startsWith("cdap.")) {
 
         Map<String, String> tags = MapReduceCounterCollectionService.parseTags(group);
@@ -130,26 +121,18 @@ public class MapReduceMetricsWriter {
 
         // Note: all mapreduce metrics are reported as gauges due to how mapreduce counters work;
         //       we may later emit metrics right from the tasks into the metrics system to overcome this limitation
-        for (CounterGroup counter : counters.getCounterGroup(group)) {
-          collector.gauge(counter.getName(), counter.g);
+        for (Counter counter : counters.getGroup(group)) {
+          LOG.info("CDAP Counter : {} value : {}", counter.getName(), counter.getValue());
+          collector.gauge(counter.getName(), counter.getValue());
         }
       }
-    }*/
+    }
   }
 
   private long getTaskCounter(TaskCounter taskCounter) throws IOException, InterruptedException {
-
-    return jobConf.getCounters().findCounter(TaskCounter.class.getName(), taskCounter.name()).getValue();
-  }
-
-  private org.apache.hadoop.mapreduce.v2.api.records.Counters getCounters() throws IOException {
-    return clientProtocol.getCounters(getCountersRequest()).getCounters();
-  }
-
-  private GetCountersRequest getCountersRequest() {
-    GetCountersRequest request = Records.newRecord(GetCountersRequest.class);
-    request.setJobId(jobId);
-    return request;
+    long value = jobConf.getCounters().findCounter(TaskCounter.class.getName(), taskCounter.name()).getValue();
+    LOG.info("Task Counter : {} value : {}", taskCounter, value);
+    return value;
   }
 
 }

@@ -2,6 +2,7 @@
 
   <div class="col-sm-4">
     <div class="input-group">
+      <!-- Type should be one of [Source, Transform, Sink] -->
       <div class="input-group-addon">Type</div>
       <button type="button"
               class="btn btn-default"
@@ -13,69 +14,17 @@
     </div>
   </div>
 
-  <div class="col-sm-4">
-    <div class="input-group">
-      <div class="input-group-addon">Name</div>
-      <input type="text" placeholder="Stream Name" class="form-control input-sm"/>
-    </div>
-  </div>
-
-  <div class="col-sm-4">
-    <button type="button"
-            class="btn btn-info"
-    > Select </button>
-  </div>
-
-</div>
-
-<br />
-
-<div class="row">
-  <div class="col-sm-4">
-    <div class="input-group">
-      <div class="input-group-addon">Table View</div>
-      <button type="button"
-              class="btn btn-default"
-              ng-model="inputType"
-              placeholder="Create New"
-              bs-options="type.name as type.name for type in types" bs-select>
-          <span class="caret"></span>
-      </button>
-    </div>
-  </div>
-</div>
-
-<br />
-
-<div class="row">
-  <div class="col-sm-4">
-    <div class="input-group">
-      <div class="input-group-addon">Name</div>
-      <input type="text" placeholder="Stream Name" class="form-control input-sm"/>
-    </div>
-  </div>
-  <div class="col-sm-4">
-    <div class="input-group">
-      <div class="input-group-addon">File Type</div>
-      <button type="button"
-              class="btn btn-default"
-              ng-model="inputType"
-              placeholder="Create New"
-              bs-options="type.name as type.name for type in filetypes" bs-select>
-          <span class="caret"></span>
-      </button>
-    </div>
-  </div>
 </div>
 
 <br />
 
 <div class="form-group">
+  <h2> Properties of Source/Sink/Transform </h2>
   <div class="col-sm-12">
     <div class="row">
       <div class="col-sm-10" ng-show="schema.fields.length > 0">
         <div ng-repeat="field in schema.fields" class="h4">
-          <input type="text" class="form-control" ng-model="field.name"/>
+          <label ng-bind="field.name"></label>
           <input type="text" class="form-control" ng-model="field.type"/>
           <a href="" class="btn btn-danger btn-xs" ng-click="removeSchemaField(field)">
             <span class="fa fa-fw fa-trash"> </span>

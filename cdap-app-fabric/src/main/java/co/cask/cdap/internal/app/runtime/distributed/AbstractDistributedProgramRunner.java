@@ -171,11 +171,10 @@ public abstract class AbstractDistributedProgramRunner implements ProgramRunner 
         if (programLogbackURI != null) {
           twillPreparer.withResources(programLogbackURI);
         }
-        Credentials credentials = HBaseTokenUtils.obtainToken(hConf, new Credentials());
         TwillController twillController = twillPreparer
           .withDependencies(HBaseTableUtilFactory.getHBaseTableUtilClass())
           .addLogHandler(new PrinterLogHandler(new PrintWriter(System.out)))
-          .addSecureStore(YarnSecureStore.create(credentials))
+          .addSecureStore(YarnSecureStore.create(HBaseTokenUtils.obtainToken(hConf, new Credentials())))
           .withApplicationArguments(
             String.format("--%s", RunnableOptions.JAR), copiedProgram.getJarLocation().getName(),
             String.format("--%s", RunnableOptions.PROGRAM_OPTIONS), programOptions

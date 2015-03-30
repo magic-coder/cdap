@@ -93,7 +93,7 @@ public class ExploreServiceTwillRunnable extends AbstractMasterTwillRunnable {
       new AbstractModule() {
         @Override
         protected void configure() {
-          bind(Store.class).to(DefaultStore.class).in(Scopes.SINGLETON);
+          bind(Store.class).to(DefaultStore.class);
         }
       });
 

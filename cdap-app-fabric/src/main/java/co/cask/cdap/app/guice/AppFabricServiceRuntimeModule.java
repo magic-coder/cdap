@@ -265,7 +265,7 @@ public final class AppFabricServiceRuntimeModule extends RuntimeModule {
           .build(new TypeLiteral<ManagerFactory<DeploymentInfo, ApplicationWithPrograms>>() { })
       );
 
-      bind(Store.class).to(DefaultStore.class).in(Scopes.SINGLETON);
+      bind(Store.class).to(DefaultStore.class);
       bind(AdapterService.class).in(Scopes.SINGLETON);
       bind(NamespaceAdmin.class).to(DefaultNamespaceAdmin.class).in(Scopes.SINGLETON);
 

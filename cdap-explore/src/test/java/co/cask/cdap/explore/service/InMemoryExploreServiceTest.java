@@ -99,7 +99,7 @@ public class InMemoryExploreServiceTest {
           @Override
           protected void configure() {
             bind(NotificationFeedManager.class).to(NoOpNotificationFeedManager.class);
-            bind(Store.class).to(DefaultStore.class).in(Scopes.SINGLETON);
+            bind(Store.class).to(DefaultStore.class);
           }
         });
     transactionManager = injector.getInstance(TransactionManager.class);

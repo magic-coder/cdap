@@ -184,7 +184,7 @@ public class UpgradeTool {
           bind(NamespaceAdmin.class).to(DefaultNamespaceAdmin.class);
           bind(MetricDatasetFactory.class).to(DefaultMetricDatasetFactory.class).in(Scopes.SINGLETON);
           bind(MetricStore.class).to(DefaultMetricStore.class);
-          bind(Store.class).to(DefaultStore.class).in(Scopes.SINGLETON);
+          bind(Store.class).to(DefaultStore.class);
           bind(ConfigStore.class).to(DefaultConfigStore.class);
         }
 

@@ -361,7 +361,7 @@ public class BaseHiveExploreServiceTest {
           handlerBinder.addBinding().to(StreamHandler.class);
           handlerBinder.addBinding().to(StreamFetchHandler.class);
           CommonHandlers.add(handlerBinder);
-          bind(Store.class).to(DefaultStore.class).in(Scopes.SINGLETON);
+          bind(Store.class).to(DefaultStore.class);
           bind(StreamHttpService.class).in(Scopes.SINGLETON);
         }
       }
@@ -409,7 +409,7 @@ public class BaseHiveExploreServiceTest {
           handlerBinder.addBinding().to(StreamHandler.class);
           handlerBinder.addBinding().to(StreamFetchHandler.class);
           CommonHandlers.add(handlerBinder);
-          bind(Store.class).to(DefaultStore.class).in(Scopes.SINGLETON);
+          bind(Store.class).to(DefaultStore.class);
           bind(StreamHttpService.class).in(Scopes.SINGLETON);
         }
       }

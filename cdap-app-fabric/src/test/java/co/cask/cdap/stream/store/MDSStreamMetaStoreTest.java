@@ -72,7 +72,7 @@ public class MDSStreamMetaStoreTest extends StreamMetaStoreTestBase {
         protected void configure() {
           bind(StreamMetaStore.class).to(MDSStreamMetaStore.class).in(Scopes.SINGLETON);
           bind(MetricsCollectionService.class).to(NoOpMetricsCollectionService.class).in(Scopes.SINGLETON);
-          bind(Store.class).to(DefaultStore.class).in(Scopes.SINGLETON);
+          bind(Store.class).to(DefaultStore.class);
         }
       }
     );

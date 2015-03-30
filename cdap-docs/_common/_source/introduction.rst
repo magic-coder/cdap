@@ -20,8 +20,8 @@ goal is to provide access to the powerful technology of Apache Hadoop through a 
 big data platform for both the cloud and on-premises.
 
 In this introduction to CDAP, we're going to show how CDAP provides that access,
-demonstrated through a comparison between using CDAP |---| a new paradigm |---| and using
-the current technologies available from the Hadoop ecosystem.
+demonstrated through a comparison between using the current technologies available from
+the Hadoop ecosystem and using CDAP |---| a new paradigm.
 
 We'll look at these areas:
 
@@ -34,6 +34,9 @@ We'll look at these areas:
 
 Data Ingestion
 ==============
+
+
+
 - Streams are abstractions over HDFS with an HTTP endpoint
 - Data in a Stream are ordered and time-partitioned]
 - Support easy exploration and processing in realtime and batch

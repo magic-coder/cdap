@@ -19,7 +19,9 @@ package co.cask.cdap.explore.service;
 import co.cask.cdap.test.XSlowTests;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
+import org.junit.ClassRule;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
 
@@ -31,12 +33,17 @@ import org.junit.runners.Suite;
   HiveExploreServiceTestRun.class,
   WritableDatasetTestRun.class,
   HiveExploreObjectMappedTableTestRun.class,
-  HiveExploreServiceStopTestRun.class
+  HiveExploreServiceFileSetTest.class
 })
 public class ExploreServiceTestsSuite {
 
+  @ClassRule
+  public static TemporaryFolder tmpFolder = new TemporaryFolder();
+
   @BeforeClass
   public static void init() throws Exception {
+    // BaseHiveExploreServiceTest.tmpFolder needs to be initialized, as it will not be created until a test is run.
+    BaseHiveExploreServiceTest.tmpFolder = tmpFolder;
     BaseHiveExploreServiceTest.initialize();
     BaseHiveExploreServiceTest.runBefore = false;
     BaseHiveExploreServiceTest.runAfter = false;
@@ -44,6 +51,7 @@ public class ExploreServiceTestsSuite {
 
   @AfterClass
   public static void finish() throws Exception {
+    BaseHiveExploreServiceTest.runBefore = true;
     BaseHiveExploreServiceTest.runAfter = true;
     BaseHiveExploreServiceTest.stopServices();
   }
